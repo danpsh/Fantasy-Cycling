@@ -23,11 +23,21 @@ def load_data():
 
 riders_df, schedule_df, results_raw = load_data()
 
-# --- 3. SIDEBAR NAVIGATION ---
+# --- 3. NAVIGATION LOGIC (Button Links) ---
+if 'page' not in st.session_state:
+    st.session_state.page = "Dashboard"
+
+def set_page(page_name):
+    st.session_state.page = page_name
+
 with st.sidebar:
     st.title("Navigation")
-    # This looks like rectangular buttons instead of bubbles
-    page = st.select_slider("View Mode", options=["Dashboard", "Team Rosters"])
+    # These look like flat, clickable links
+    st.button("Dashboard", use_container_width=True, on_click=set_page, args=("Dashboard",))
+    st.button("Team Rosters", use_container_width=True, on_click=set_page, args=("Team Rosters",))
+
+# Assign the session state to the 'page' variable used in the rest of your code
+page = st.session_state.page
 
 if results_raw is not None:
     # --- 4. DATA PROCESSING ---
@@ -133,5 +143,6 @@ if results_raw is not None:
 
 else:
     st.error("Error: Check that riders.csv, schedule.csv, and results.xlsx are in your GitHub folder.")
+
 
 
