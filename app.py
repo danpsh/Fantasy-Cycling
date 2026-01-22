@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 # --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="2026 World Tour Draft", layout="wide")
+st.set_page_config(page_title="2026 Fantasy Cycling", layout="wide")
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -78,3 +78,4 @@ if results_raw is not None:
         use_container_width=True, 
         hide_index=True
     )
+
