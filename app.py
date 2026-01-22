@@ -55,7 +55,7 @@ if results_raw is not None:
     processed['pts'] = processed.apply(calc_points, axis=1)
 
     # --- 6. DISPLAY DASHBOARD ---
-    st.title("🚴 2026 World Tour Draft Tracker")
+    st.title("🚴 2026 Fantasy Cycling")
     
     # Leaderboard
     st.header("🏆 Leaderboard")
@@ -78,4 +78,5 @@ if results_raw is not None:
         use_container_width=True, 
         hide_index=True
     )
+
 
