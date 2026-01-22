@@ -3,7 +3,8 @@ import pandas as pd
 import plotly.express as px
 
 # --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="Fantasy Cycling", layout="wide")
+# initial_sidebar_state="collapsed" ensures the sidebar stays out of the way on mobile/small screens
+st.set_page_config(page_title="Fantasy Cycling", layout="wide", initial_sidebar_state="collapsed")
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -20,12 +21,11 @@ def load_data():
         results = pd.read_excel('results.xlsx')
         return riders, schedule, results
     except Exception as e:
-        st.error(f"Error loading files: {e}")
         return None, None, None
 
 riders_df, schedule_df, results_raw = load_data()
 
-# --- 3. NAVIGATION LOGIC (Button Links) ---
+# --- 3. NAVIGATION LOGIC ---
 if 'page' not in st.session_state:
     st.session_state.page = "Dashboard"
 
@@ -42,8 +42,6 @@ page = st.session_state.page
 if results_raw is not None:
     # --- 4. DATA PROCESSING ---
     riders_df['match_name'] = riders_df['rider_name'].str.split('-').str[0].str.strip().str.lower()
-    
-    # Process Results and handle Dates
     results_raw['Race_Num'] = range(1, len(results_raw) + 1)
     results_raw['Date'] = pd.to_datetime(results_raw['Date'])
 
@@ -60,14 +58,12 @@ if results_raw is not None:
     processed = processed.merge(schedule_df, left_on='Race Name', right_on='race_name')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
 
-    # Leaderboard Calculation
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
 
     # --- 5. PAGE 1: DASHBOARD ---
     if page == "Dashboard":
         st.title("Fantasy Cycling")
         
-        # Current Scores Row (Horizontal Header)
         h1, h2 = st.columns(2)
         for i, owner in enumerate(leaderboard['owner']):
             points = leaderboard[leaderboard['owner'] == owner]['pts'].values[0]
@@ -76,7 +72,6 @@ if results_raw is not None:
         
         st.write("---")
         
-        # Top 3 Scorers section
         st.subheader("Top Scorers")
         m1, m2 = st.columns(2)
         for i, owner in enumerate(leaderboard['owner']):
@@ -88,7 +83,6 @@ if results_raw is not None:
                     for _, row in top_3.iterrows():
                         st.write(f"- {row['rider_name_x']}: {row['pts']} pts")
 
-        # Tabs
         tab1, tab2, tab3 = st.tabs(["Standings Graph", "Rider Leaderboard", "Full History"])
 
         with tab1:
@@ -100,44 +94,36 @@ if results_raw is not None:
 
             fig = px.line(chart_data, x="Race_Num", y="Total Points", color="owner", markers=True,
                          hover_data={'Race Name': True, 'Stage': True, 'Total Points': True})
-            
-            fig.update_layout(
-                xaxis=dict(title="Race Sequence", fixedrange=True, tickmode='linear', dtick=1), 
-                yaxis=dict(fixedrange=True), 
-                dragmode=False
-            )
+            fig.update_layout(xaxis=dict(title="Race Sequence", fixedrange=True, tickmode='linear', dtick=1), yaxis=dict(fixedrange=True), dragmode=False)
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         with tab2:
             st.subheader("All Drafted Riders")
             rider_pts = processed.groupby(['rider_name_x', 'owner'])['pts'].sum().sort_values(ascending=False).reset_index()
-            st.dataframe(
-                rider_pts.rename(columns={'rider_name_x': 'Rider', 'owner': 'Team Owner', 'pts': 'Season Total'}), 
-                use_container_width=True, 
-                hide_index=True
-            )
+            st.dataframe(rider_pts.rename(columns={'rider_name_x': 'Rider', 'owner': 'Team Owner', 'pts': 'Season Total'}), use_container_width=True, hide_index=True)
 
         with tab3:
             st.subheader("Complete Season Results")
-            # Sort by Date then Race Number
             history_view = processed.sort_values(by=['Date', 'Race_Num'], ascending=True)
-            
-            # Format date and select columns
             history_view['Formatted Date'] = history_view['Date'].dt.strftime('%b %d, %Y')
             history_view = history_view[['Formatted Date', 'Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']]
-            
-            # Better Column Headers
             history_view.columns = ['Race Date', 'Event Name', 'Stage/Race', 'Scoring Rider', 'Team Owner', 'Points Earned']
-            
             st.dataframe(history_view, use_container_width=True, hide_index=True)
 
-    # --- 6. PAGE 2: TEAM ROSTERS ---
+    # --- 6. PAGE 2: TEAM ROSTERS (Dual Column View) ---
     elif page == "Team Rosters":
         st.title("Team Rosters")
-        owners = sorted(riders_df['owner'].unique())
+        
+        # We manually define the owners to ensure they stay in their respective columns
         col_left, col_right = st.columns(2)
+        
+        # Get unique owners
+        owners = sorted(riders_df['owner'].unique())
+        
         for i, owner in enumerate(owners):
-            with (col_left if i == 0 else col_right):
+            # i=0 goes to left, i=1 goes to right
+            target_col = col_left if i == 0 else col_right
+            with target_col:
                 st.header(f"Team {owner}")
                 team_list = riders_df[riders_df['owner'] == owner][['rider_name']].reset_index(drop=True)
                 team_list.index = team_list.index + 1
