@@ -26,8 +26,8 @@ riders_df, schedule_df, results_raw = load_data()
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.title("Navigation")
-    # This replaces the radio bubbles with a clean dropdown menu
-    page = st.selectbox("Select Page", ["Dashboard", "Team Rosters"])
+    # This looks like rectangular buttons instead of bubbles
+    page = st.select_slider("View Mode", options=["Dashboard", "Team Rosters"])
 
 if results_raw is not None:
     # --- 4. DATA PROCESSING ---
@@ -133,4 +133,5 @@ if results_raw is not None:
 
 else:
     st.error("Error: Check that riders.csv, schedule.csv, and results.xlsx are in your GitHub folder.")
+
 
