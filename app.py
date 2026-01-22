@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# --- 1. CONFIG & SCORING ---
+# --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="Fantasy Cycling", layout="wide")
 
 SCORING = {
@@ -36,55 +36,66 @@ if results_raw is not None:
     processed = processed.merge(schedule_df, left_on='Race Name', right_on='race_name')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
 
-    # --- 4. HEADER: TITLE & MVP STATS ---
-    st.title("🚴 Fantasy Cycling")
+    # --- 4. SIDEBAR ROSTERS ---
+    with st.sidebar:
+        st.title("Team Rosters")
+        
+        owners = sorted(riders_df['owner'].unique())
+        
+        for owner in owners:
+            with st.expander(f"Team {owner}"):
+                team_list = riders_df[riders_df['owner'] == owner]['rider_name'].values
+                for rider in team_list:
+                    st.write(f"- {rider}")
+
+    # --- 5. MAIN DASHBOARD ---
+    st.title("Fantasy Cycling")
     
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
     
-    # Hero Metrics
+    # Header Stats
     c1, c2 = st.columns(2)
     with c1:
-        score1 = leaderboard.iloc[0]['pts']
-        st.metric(label=f"🥇 CHAMPION: {leaderboard.iloc[0]['owner']}", value=f"{score1} pts")
+        st.metric(label=f"Rank 1: {leaderboard.iloc[0]['owner']}", value=f"{leaderboard.iloc[0]['pts']} pts")
     with c2:
         if len(leaderboard) > 1:
-            score2 = leaderboard.iloc[1]['pts']
-            gap = int(score2 - score1)
-            st.metric(label=f"🥈 CHALLENGER: {leaderboard.iloc[1]['owner']}", value=f"{score2} pts", delta=gap)
+            gap = int(leaderboard.iloc[1]['pts'] - leaderboard.iloc[0]['pts'])
+            st.metric(label=f"Rank 2: {leaderboard.iloc[1]['owner']}", value=f"{leaderboard.iloc[1]['pts']} pts", delta=gap)
 
-    # MVP Spotlight
-    st.write("---")
-    m1, m2 = st.columns(2)
-    for i, owner in enumerate(leaderboard['owner']):
-        best_rider = processed[processed['owner'] == owner].groupby('rider_name_x')['pts'].sum().idxmax()
-        rider_pts = processed[processed['owner'] == owner].groupby('rider_name_x')['pts'].sum().max()
-        with (m1 if i == 0 else m2):
-            st.write(f"🌟 **{owner}'s MVP:** {best_rider} ({rider_pts} pts)")
-
-    # --- 5. TABS: GRAPH, ROSTERS, HISTORY ---
-    tab1, tab2, tab3 = st.tabs(["📊 Standings", "🚴 Roster Stats", "📄 Full History"])
+    # --- 6. TABS: GRAPH, MVP, HISTORY ---
+    tab1, tab2, tab3 = st.tabs(["Standings", "MVP Spotlight", "Full History"])
 
     with tab1:
+        st.subheader("Season Progression")
         chart_data = processed.groupby(['Race_Num', 'owner'])['pts'].sum().reset_index()
         chart_data['Total Points'] = chart_data.groupby('owner')['pts'].cumsum()
         
-        # Adding Race info to hover
         race_info = results_raw[['Race_Num', 'Race Name', 'Stage']]
         chart_data = chart_data.merge(race_info, on='Race_Num')
 
         fig = px.line(chart_data, x="Race_Num", y="Total Points", color="owner", markers=True,
                      hover_data={'Race Name': True, 'Stage': True, 'Total Points': True})
         
-        # LOCKING THE GRAPH (No jumping!)
-        fig.update_layout(xaxis=dict(fixedrange=True, tickmode='linear', dtick=1), 
-                          yaxis=dict(fixedrange=True), dragmode=False)
+        fig.update_layout(
+            xaxis=dict(fixedrange=True, tickmode='linear', dtick=1), 
+            yaxis=dict(fixedrange=True), 
+            dragmode=False
+        )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with tab2:
-        st.subheader("Rider Performance")
+        st.subheader("Top Performers")
         rider_pts = processed.groupby(['rider_name_x', 'owner'])['pts'].sum().sort_values(ascending=False).reset_index()
-        st.dataframe(rider_pts.rename(columns={'rider_name_x': 'Rider', 'pts': 'Total Points'}), use_container_width=True, hide_index=True)
+        st.dataframe(
+            rider_pts.rename(columns={'rider_name_x': 'Rider', 'pts': 'Total Points'}), 
+            use_container_width=True, 
+            hide_index=True
+        )
 
     with tab3:
-        st.subheader("All Results")
-        st.dataframe(processed[['Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']], use_container_width=True, hide_index=True)
+        st.subheader("Race Results Log")
+        st.dataframe(
+            processed[['Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']], 
+            use_container_width=True, 
+            hide_index=True
+        )
