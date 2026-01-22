@@ -42,7 +42,7 @@ if results_raw is not None:
     chart_data['Total Points'] = chart_data.groupby('owner')['pts'].cumsum()
 
     # --- UI DISPLAY ---
-    st.title("🚴 2026 Cycling Draft")
+    st.title("🚴 2026 Fantasy Cycling")
     
     # Leaderboard Metrics
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
@@ -64,3 +64,4 @@ if results_raw is not None:
     st.subheader("Rider Totals")
     rider_table = processed.groupby(['rider_name_x', 'owner'])['pts'].sum().sort_values(ascending=False)
     st.dataframe(rider_table, use_container_width=True)
+
