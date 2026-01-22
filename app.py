@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# --- 1. CONFIGURATION & SCORING ---
+# --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="2026 World Tour Draft", layout="wide")
 
 SCORING = {
@@ -16,62 +16,65 @@ def load_data():
     try:
         riders = pd.read_csv('riders.csv')
         schedule = pd.read_csv('schedule.csv')
-        results_raw = pd.read_excel('results.xlsx')
-        return riders, schedule, results_raw
+        results = pd.read_excel('results.xlsx')
+        return riders, schedule, results
     except Exception as e:
-        st.error(f"⚠️ File Loading Error: {e}")
+        st.error(f"⚠️ Error loading files: {e}")
         return None, None, None
 
 riders_df, schedule_df, results_raw = load_data()
 
 if results_raw is not None:
-    # --- 3. TRANSFORM DATA ---
+    # --- 3. CLEANING & MATCHING LOGIC ---
+    # Prepare Draft List: Remove team names/spaces and make lowercase
+    riders_df['match_name'] = riders_df['rider_name'].str.split('-').str[0].str.strip().str.lower()
+    
+    # Pivot Results: Turn "1st", "2nd" columns into one long list of riders
     df_long = results_raw.melt(
         id_vars=['Race Name', 'Stage'], 
-        var_name='Position_Label', 
+        var_name='Position', 
         value_name='rider_name'
     )
     
-    # CRITICAL: Clean up names (removes hidden spaces)
-    df_long['rider_name'] = df_long['rider_name'].astype(str).str.strip()
-    riders_df['rider_name'] = riders_df['rider_name'].astype(str).str.strip()
-    
-    # Assign ranks 1-10
+    # Standardize result names for the cross-reference
+    df_long['match_name'] = df_long['rider_name'].astype(str).str.strip().str.lower()
     df_long['rank'] = df_long.groupby(['Race Name', 'Stage']).cumcount() + 1
+
+    # --- 4. THE CROSS-REFERENCE (The Merge) ---
+    # This connects your results to your owners
+    processed = df_long.merge(riders_df, on='match_name', how='inner')
     
-    # --- 4. MERGING (The Crash Point) ---
-    # Merge with riders to get Owners
-    processed = df_long.merge(riders_df, on='rider_name', how='inner')
-    
-    # Merge with schedule to get Tiers
+    # This connects the race to its Tier (for points)
     processed = processed.merge(schedule_df, left_on='Race Name', right_on='race_name')
 
-    # --- CHECKPOINT: Is the table empty? ---
-    if processed.empty:
-        st.warning("⚠️ No drafted riders found in the results!")
-        st.info("Check if the rider names in your Excel match your riders.csv exactly.")
-        st.write("Names detected in your Excel:", df_long['rider_name'].unique())
-    else:
-        # 5. CALCULATE POINTS
-        def get_points(row):
-            return SCORING.get(row['tier'], {}).get(row['rank'], 0)
-        
-        processed['points_earned'] = processed.apply(get_points, axis=1)
+    # --- 5. POINT CALCULATION ---
+    def calc_points(row):
+        tier_scores = SCORING.get(row['tier'], {})
+        return tier_scores.get(row['rank'], 0)
 
-        # --- 6. DASHBOARD UI ---
-        st.title("🚴 2026 Cycling Draft: Daniel vs Tanner")
-        
-        # Leaderboard
-        leaderboard = processed.groupby('owner')['points_earned'].sum().sort_values(ascending=False).reset_index()
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric(label=f"🥇 {leaderboard.iloc[0]['owner']}", value=f"{leaderboard.iloc[0]['points_earned']} pts")
-        with col2:
-            if len(leaderboard) > 1:
-                gap = int(leaderboard.iloc[1]['points_earned'] - leaderboard.iloc[0]['points_earned'])
-                st.metric(label=f"🥈 {leaderboard.iloc[1]['owner']}", value=f"{leaderboard.iloc[1]['points_earned']} pts", delta=gap)
+    processed['pts'] = processed.apply(calc_points, axis=1)
 
-        st.divider()
-        st.subheader("Race Breakdown")
-        st.dataframe(processed[['Race Name', 'Stage', 'rider_name', 'owner', 'points_earned']], use_container_width=True, hide_index=True)
+    # --- 6. DISPLAY DASHBOARD ---
+    st.title("🚴 2026 World Tour Draft Tracker")
+    
+    # Leaderboard
+    st.header("🏆 Leaderboard")
+    leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.metric(label=f"🥇 {leaderboard.iloc[0]['owner']}", value=f"{leaderboard.iloc[0]['pts']} pts")
+    with c2:
+        if len(leaderboard) > 1:
+            diff = int(leaderboard.iloc[1]['pts'] - leaderboard.iloc[0]['pts'])
+            st.metric(label=f"🥈 {leaderboard.iloc[1]['owner']}", value=f"{leaderboard.iloc[1]['pts']} pts", delta=diff)
+
+    # Breakdown Table
+    st.divider()
+    st.subheader("Performance Breakdown")
+    st.dataframe(
+        processed[['Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']], 
+        column_config={"rider_name_x": "Rider"},
+        use_container_width=True, 
+        hide_index=True
+    )
