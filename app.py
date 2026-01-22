@@ -23,7 +23,7 @@ def load_data():
 
 riders_df, schedule_df, results_raw = load_data()
 
-# --- 3. NAVIGATION LOGIC (Button Links) ---
+# --- 3. NAVIGATION LOGIC ---
 if 'page' not in st.session_state:
     st.session_state.page = "Dashboard"
 
@@ -48,36 +48,38 @@ if results_raw is not None:
     processed = processed.merge(schedule_df, left_on='Race Name', right_on='race_name')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
 
-    # Calculate Totals for the header
-    leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
+    # Pre-calculate Leaderboard
+    leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
 
     # --- 5. PAGE 1: DASHBOARD ---
     if page == "Dashboard":
-        # TOP SCORE HEADER
-        # We create a simple, elegant header for the points
-        st.write("Current Standings")
+        # Title at the very top
+        st.title("Fantasy Cycling")
+        
+        # Current Scores Row
         h1, h2 = st.columns(2)
         for i, owner in enumerate(leaderboard['owner']):
             points = leaderboard[leaderboard['owner'] == owner]['pts'].values[0]
             with (h1 if i == 0 else h2):
-                st.markdown(f"### {owner}: {points} pts")
+                st.subheader(f"{owner}: {points} pts")
         
-        st.divider()
-        st.title("Fantasy Cycling")
+        st.write("---")
         
-        # MVP Spotlight section
+        # Top 3 Scorers section
+        st.subheader("Top Scorers")
         m1, m2 = st.columns(2)
         for i, owner in enumerate(leaderboard['owner']):
             owner_data = processed[processed['owner'] == owner]
             if not owner_data.empty:
-                rider_totals = owner_data.groupby('rider_name_x')['pts'].sum()
-                best_rider = rider_totals.idxmax()
-                rider_pts = rider_totals.max()
+                # Get Top 3
+                top_3 = owner_data.groupby('rider_name_x')['pts'].sum().sort_values(ascending=False).head(3).reset_index()
                 with (m1 if i == 0 else m2):
-                    st.info(f"Team {owner} MVP: {best_rider} ({rider_pts} pts)")
+                    st.write(f"**Team {owner}**")
+                    for _, row in top_3.iterrows():
+                        st.write(f"- {row['rider_name_x']}: {row['pts']} pts")
 
-        # Tabs for Graph and Logs
-        tab1, tab2, tab3 = st.tabs(["Standings", "MVP Breakdown", "Full History"])
+        # Tabs
+        tab1, tab2, tab3 = st.tabs(["Standings", "All Rider Stats", "Full History"])
 
         with tab1:
             st.subheader("Season Progression")
@@ -93,7 +95,7 @@ if results_raw is not None:
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         with tab2:
-            st.subheader("Top Performers")
+            st.subheader("Full Rider Performance")
             rider_pts = processed.groupby(['rider_name_x', 'owner'])['pts'].sum().sort_values(ascending=False).reset_index()
             st.dataframe(rider_pts.rename(columns={'rider_name_x': 'Rider', 'pts': 'Total Points'}), use_container_width=True, hide_index=True)
 
