@@ -23,22 +23,8 @@ def load_data():
 
 riders_df, schedule_df, results_raw = load_data()
 
-# --- 3. NAVIGATION LOGIC (Button Links) ---
-if 'page' not in st.session_state:
-    st.session_state.page = "Dashboard"
-
-def set_page(page_name):
-    st.session_state.page = page_name
-
-with st.sidebar:
-    st.title("Navigation")
-    st.button("Dashboard", use_container_width=True, on_click=set_page, args=("Dashboard",))
-    st.button("Team Rosters", use_container_width=True, on_click=set_page, args=("Team Rosters",))
-
-page = st.session_state.page
-
 if results_raw is not None:
-    # --- 4. DATA PROCESSING ---
+    # --- 3. DATA PROCESSING (Required before Sidebar) ---
     riders_df['match_name'] = riders_df['rider_name'].str.split('-').str[0].str.strip().str.lower()
     results_raw['Race_Num'] = range(1, len(results_raw) + 1)
     df_long = results_raw.melt(id_vars=['Race Name', 'Stage', 'Race_Num'], var_name='Pos', value_name='rider_name')
@@ -48,14 +34,41 @@ if results_raw is not None:
     processed = processed.merge(schedule_df, left_on='Race Name', right_on='race_name')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
 
+    # Calculate Current Totals
+    leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
+
+    # --- 4. NAVIGATION LOGIC (Button Links) ---
+    if 'page' not in st.session_state:
+        st.session_state.page = "Dashboard"
+
+    def set_page(page_name):
+        st.session_state.page = page_name
+
+    with st.sidebar:
+        st.title("Navigation")
+        st.button("Dashboard", use_container_width=True, on_click=set_page, args=("Dashboard",))
+        st.button("Team Rosters", use_container_width=True, on_click=set_page, args=("Team Rosters",))
+        
+        st.write("---")
+        st.subheader("Current Totals")
+        for index, row in leaderboard.iterrows():
+            st.write(f"**{row['owner']}:** {row['pts']} pts")
+
+    page = st.session_state.page
+
     # --- 5. PAGE 1: DASHBOARD ---
     if page == "Dashboard":
+        # Live Scoreboard Banner
+        score_text = " | ".join([f"{row['owner']}: {row['pts']}" for index, row in leaderboard.iterrows()])
+        st.markdown(f"""
+            <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; text-align: center;">
+                <h2 style="margin: 0; color: #31333F; font-family: sans-serif;">{score_text}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.title("Fantasy Cycling")
         
-        # Calculate scores for MVP and Lead info
-        leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
-        
-        # New Header: MVP Spotlight at the very top instead of Rank 1/2
+        # MVP Spotlight section
         m1, m2 = st.columns(2)
         for i, owner in enumerate(leaderboard['owner']):
             owner_data = processed[processed['owner'] == owner]
