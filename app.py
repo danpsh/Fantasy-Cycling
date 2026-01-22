@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 
-# --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="2026 Fantasy Cycling", layout="wide")
+# --- 1. CONFIG & SCORING ---
+st.set_page_config(page_title="2026 World Tour Draft", layout="wide")
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -19,64 +19,54 @@ def load_data():
         results = pd.read_excel('results.xlsx')
         return riders, schedule, results
     except Exception as e:
-        st.error(f"⚠️ Error loading files: {e}")
         return None, None, None
 
 riders_df, schedule_df, results_raw = load_data()
 
 if results_raw is not None:
-    # --- 3. CLEANING & MATCHING LOGIC ---
-    # Prepare Draft List: Remove team names/spaces and make lowercase
+    # --- 3. DATA PROCESSING ---
     riders_df['match_name'] = riders_df['rider_name'].str.split('-').str[0].str.strip().str.lower()
-    
-    # Pivot Results: Turn "1st", "2nd" columns into one long list of riders
-    df_long = results_raw.melt(
-        id_vars=['Race Name', 'Stage'], 
-        var_name='Position', 
-        value_name='rider_name'
-    )
-    
-    # Standardize result names for the cross-reference
+    df_long = results_raw.melt(id_vars=['Race Name', 'Stage'], var_name='Pos', value_name='rider_name')
     df_long['match_name'] = df_long['rider_name'].astype(str).str.strip().str.lower()
     df_long['rank'] = df_long.groupby(['Race Name', 'Stage']).cumcount() + 1
 
-    # --- 4. THE CROSS-REFERENCE (The Merge) ---
-    # This connects your results to your owners
     processed = df_long.merge(riders_df, on='match_name', how='inner')
-    
-    # This connects the race to its Tier (for points)
     processed = processed.merge(schedule_df, left_on='Race Name', right_on='race_name')
+    processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
 
-    # --- 5. POINT CALCULATION ---
-    def calc_points(row):
-        tier_scores = SCORING.get(row['tier'], {})
-        return tier_scores.get(row['rank'], 0)
-
-    processed['pts'] = processed.apply(calc_points, axis=1)
-
-    # --- 6. DISPLAY DASHBOARD ---
-    st.title("🚴 2026 Fantasy Cycling")
+    # --- 4. HEADER METRICS ---
+    st.title("🚴 2026 Cycling Draft: Daniel vs Tanner")
     
-    # Leaderboard
-    st.header("🏆 Leaderboard")
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
     
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric(label=f"🥇 {leaderboard.iloc[0]['owner']}", value=f"{leaderboard.iloc[0]['pts']} pts")
-    with c2:
+    m1, m2 = st.columns(2)
+    with m1:
+        score1 = leaderboard.iloc[0]['pts']
+        st.metric(label=f"🏆 LEADER: {leaderboard.iloc[0]['owner']}", value=f"{score1} pts")
+    with m2:
         if len(leaderboard) > 1:
-            diff = int(leaderboard.iloc[1]['pts'] - leaderboard.iloc[0]['pts'])
-            st.metric(label=f"🥈 {leaderboard.iloc[1]['owner']}", value=f"{leaderboard.iloc[1]['pts']} pts", delta=diff)
+            score2 = leaderboard.iloc[1]['pts']
+            gap = int(score2 - score1)
+            st.metric(label=f"CHALLENGER: {leaderboard.iloc[1]['owner']}", value=f"{score2} pts", delta=gap)
 
-    # Breakdown Table
-    st.divider()
-    st.subheader("Performance Breakdown")
-    st.dataframe(
-        processed[['Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']], 
-        column_config={"rider_name_x": "Rider"},
-        use_container_width=True, 
-        hide_index=True
-    )
+    # --- 5. TABS FOR ORGANIZATION ---
+    tab1, tab2, tab3 = st.tabs(["📊 Standings", "🚴 Roster Stats", "📄 Raw Results"])
 
+    with tab1:
+        st.subheader("Season Progression")
+        # Create cumulative points over time
+        processed['Race_Stage'] = processed['Race Name'] + " - " + processed['Stage']
+        chart_data = processed.groupby(['Race_Stage', 'owner'])['pts'].sum().groupby(level=1).cumsum().reset_index()
+        st.line_chart(chart_data, x="Race_Stage", y="pts", color="owner")
 
+    with tab2:
+        st.subheader("Rider Contribution")
+        rider_pts = processed.groupby(['rider_name_x', 'owner'])['pts'].sum().sort_values(ascending=False).reset_index()
+        st.dataframe(rider_pts, use_container_width=True, hide_index=True)
+
+    with tab3:
+        st.subheader("All Race Data")
+        st.dataframe(processed[['Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']], use_container_width=True)
+
+else:
+    st.error("Please ensure your CSV and Excel files are uploaded correctly.")
