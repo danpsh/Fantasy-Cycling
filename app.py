@@ -1,12 +1,16 @@
 import streamlit as st
 import pandas as pd
 import unicodedata
-import plotly.express as px
+import requests
+from io import BytesIO
 
-# --- 1. SETTINGS & SCORING ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="2026 Fantasy League", layout="wide")
 
-# Scoring logic (Remains the same)
+# REPLACE THIS URL with your actual GitHub Raw link!
+# To get this: Go to your excel file on GitHub -> click "Download" or "View Raw" -> copy that URL
+GITHUB_RAW_URL = "https://github.com/YOUR_USERNAME/YOUR_REPO/raw/main/results.xlsx"
+
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
     "Tier 2": {1: 20, 2: 18, 3: 16, 4: 14, 5: 12, 6: 10, 7: 8, 8: 6, 9: 4, 10: 2},
@@ -18,59 +22,50 @@ def normalize(name):
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return " ".join(sorted(name.lower().replace('-', ' ').split()))
 
-# --- 2. UI & DATA LOADING ---
-st.title("🏆 2026 Fantasy Cycling Leaderboard")
+# --- 2. DATA LOADING ---
+@st.cache_data(ttl=600) # Refreshes every 10 minutes
+def load_data():
+    try:
+        # Load Riders from local GitHub folder
+        riders = pd.read_csv('riders.csv')
+        riders['match_name'] = riders['rider_name'].apply(normalize)
+        
+        # Load Results from GitHub URL
+        response = requests.get(GITHUB_RAW_URL)
+        results = pd.read_excel(BytesIO(response.content), engine='openpyxl')
+        results['match_name'] = results['rider_name'].apply(normalize)
+        
+        return riders, results
+    except Exception as e:
+        st.error(f"Error loading files: {e}")
+        return None, None
 
-# Side panel for uploads
-with st.sidebar:
-    st.header("Data Upload")
-    uploaded_file = st.file_uploader("Upload 'results.xlsx'", type=["xlsx"])
-    st.info("Ensure your Excel has columns: 'rider_name', 'rank', and 'tier'")
+# --- 3. DISPLAY ---
+st.title("🏆 2026 Fantasy League Standings")
 
-# Load your local rider list from GitHub automatically
-try:
-    riders_df = pd.read_csv('riders.csv')
-    riders_df['match_name'] = riders_df['rider_name'].apply(normalize)
-except:
-    st.error("Riders.csv missing from GitHub!")
-    st.stop()
+riders_df, results_df = load_data()
 
-if uploaded_file:
-    # Read the uploaded Excel file
-    results_df = pd.read_excel(uploaded_file, engine='openpyxl')
-    
-    # Process Points
-    results_df['match_name'] = results_df['rider_name'].apply(normalize)
-    
-    # Merge with owners
+if riders_df is not None and results_df is not None:
+    # Merge and Calculate
     merged = results_df.merge(riders_df, on='match_name', how='inner')
     
-    # Calculate Points based on Rank and Tier
-    def calc_pts(row):
-        try:
-            rank = int(row['rank'])
-            return SCORING.get(row['tier'], {}).get(rank, 0)
-        except:
-            return 0
+    def get_pts(row):
+        return SCORING.get(row['tier'], {}).get(int(row['rank']), 0)
+    
+    merged['pts'] = merged.apply(get_pts, axis=1)
 
-    merged['pts'] = merged.apply(calc_pts, axis=1)
-
-    # --- 3. DISPLAY ---
-    col1, col2 = st.columns([1, 2])
-
+    # Standings Table
+    standings = merged.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
+    
+    col1, col2 = st.columns([1, 1])
     with col1:
-        st.subheader("Current Standings")
-        standings = merged.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
-        st.table(standings)
-
+        st.subheader("Leaderboard")
+        st.table(standings.rename(columns={'owner': 'Team', 'pts': 'Total Points'}))
+    
     with col2:
-        st.subheader("Points Visualization")
-        fig = px.bar(standings, x='owner', y='pts', color='owner', text_auto=True)
-        st.plotly_chart(fig, use_container_width=True)
+        st.subheader("Recent Points")
+        st.dataframe(merged[['rider_name_x', 'owner', 'pts']].tail(10), hide_index=True)
 
-    st.divider()
-    st.subheader("Detailed Points Breakdown")
-    st.dataframe(merged[['rider_name_x', 'owner', 'rank', 'tier', 'pts']], use_container_width=True)
-
-else:
-    st.warning("Please upload your 'results.xlsx' file in the sidebar to see the leaderboard.")
+    if st.button("🔄 Refresh Data"):
+        st.cache_data.clear()
+        st.rerun()
