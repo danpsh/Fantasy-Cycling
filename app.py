@@ -3,10 +3,10 @@ import pandas as pd
 from procyclingstats import Race, Stage
 import unicodedata
 import plotly.express as px
-import requests
+import os
 
 # --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="2026 Fantasy League", layout="wide")
+st.set_page_config(page_title="Cycling Fantasy Diagnostic", layout="wide")
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -20,39 +20,35 @@ def normalize(name):
     words = name.lower().replace('-', ' ').split()
     return " ".join(sorted(words))
 
-# --- 2. THE "FORCE" SCRAPER ---
-@st.cache_data(show_spinner="Connecting to PCS...")
+# --- 2. THE DIAGNOSTIC SCRAPER ---
+@st.cache_data(show_spinner="Attempting to reach ProCyclingStats...")
 def scrape_data(schedule_df):
     all_results = []
-    # This headers dictionary tricks the website into thinking you are a real person
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
     
+    # Check if schedule_df is empty
+    if schedule_df is None or schedule_df.empty:
+        st.sidebar.error("Scraper received an empty schedule!")
+        return None
+
     for _, row in schedule_df.iterrows():
         try:
-            # Add /result to the URL if it's missing to ensure we hit the data page
-            clean_url = row['url'].strip()
-            if not clean_url.endswith('/result') and not clean_url.endswith('/2025'):
-                 clean_url += '/result'
+            url = row['url'].strip()
+            # Safety: Remove leading slashes if they exist
+            if url.startswith('/'): url = url[1:]
             
-            # Use the library but with a safety check
-            race = Race(clean_url)
-            
-            # Try to get stages. If it fails, assume it's a one-day race
+            race = Race(url)
             try:
                 stages = race.stages()
             except:
                 stages = []
             
-            target_urls = [s['stage_url'] for s in stages] if stages else [clean_url]
+            # If no stages (one day race), use result subpage
+            target_urls = [s['stage_url'] for s in stages] if stages else [f"{url}/result"]
             
             for s_url in target_urls:
                 try:
-                    # Initialize Stage with our fake 'real person' identity
                     stage_data = Stage(s_url)
                     results = stage_data.results()
-                    
                     if results:
                         df = pd.DataFrame(results)
                         df['rank'] = pd.to_numeric(df['rank'], errors='coerce')
@@ -65,29 +61,49 @@ def scrape_data(schedule_df):
                 except:
                     continue
         except Exception as e:
-            st.sidebar.error(f"Failed {row['race_name']}: {str(e)[:50]}")
+            st.sidebar.warning(f"Failed race {row['race_name']}: {e}")
             continue
             
     return pd.concat(all_results, ignore_index=True) if all_results else None
 
-# --- 3. UI LOGIC ---
+# --- 3. UI & FOLDER CHECK ---
 def main():
+    st.title("🚴‍♂️ Fantasy Cycling: 2025 Test Mode")
+    
     with st.sidebar:
         st.header("App Admin")
-        if st.button("🔄 Force Sync Results", use_container_width=True):
+        if st.button("🔄 Force Refresh & Sync", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
-        page = st.radio("Navigation", ["Leaderboard", "Raw Results", "Roster Check"])
+        page = st.radio("Navigation", ["Leaderboard", "Detailed Results", "System Health"])
 
-    # Load Files
-    try:
-        riders_df = pd.read_csv('riders.csv')
-        schedule_df = pd.read_csv('schedule.csv')
-    except:
-        st.error("Missing riders.csv or schedule.csv on GitHub!")
+    # SYSTEM HEALTH CHECK
+    files_in_dir = os.listdir('.')
+    riders_exists = 'riders.csv' in files_in_dir
+    schedule_exists = 'schedule.csv' in files_in_dir
+    reqs_exists = 'requirements.txt' in files_in_dir
+
+    if page == "System Health":
+        st.header("📂 Folder & File Check")
+        st.write(f"**Files found in GitHub:** {files_in_dir}")
+        st.write(f"**riders.csv exists?** {'✅' if riders_exists else '❌'}")
+        st.write(f"**schedule.csv exists?** {'✅' if schedule_exists else '❌'}")
+        st.write(f"**requirements.txt exists?** {'✅' if reqs_exists else '❌'}")
+        
+        if schedule_exists:
+            st.write("---")
+            st.write("**Current Schedule Content:**")
+            st.dataframe(pd.read_csv('schedule.csv'))
         return
 
-    # Scrape
+    # LOAD DATA
+    if not (riders_exists and schedule_exists):
+        st.error("Cannot run. Check 'System Health' tab to see which files are missing.")
+        return
+
+    riders_df = pd.read_csv('riders.csv')
+    schedule_df = pd.read_csv('schedule.csv')
+    
     results_raw = scrape_data(schedule_df)
 
     if results_raw is not None:
@@ -98,23 +114,20 @@ def main():
         merged['pts'] = merged.apply(lambda r: SCORING.get(r['tier'], {}).get(int(r['rank']), 0), axis=1)
 
         if page == "Leaderboard":
-            st.title("🏆 Season Standings")
             if not merged.empty:
                 standings = merged.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
-                st.plotly_chart(px.bar(standings, x='owner', y='pts', color='owner'))
+                st.plotly_chart(px.bar(standings, x='owner', y='pts', color='owner', text_auto=True))
                 st.table(standings)
             else:
-                st.warning("Found results on PCS, but none of your riders matched. Check names!")
+                st.warning("Scraper found results, but no riders matched. Check your riders.csv names vs PCS names.")
+                st.write("First few names found by scraper:")
+                st.write(results_raw['rider_name'].head(5).tolist())
 
-        elif page == "Raw Results":
-            st.title("🔍 All Top 10s Found")
-            st.dataframe(results_raw[['Date', 'Race Name', 'Stage', 'rider_name', 'rank']])
+        elif page == "Detailed Results":
+            st.dataframe(merged[['Date', 'Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']])
             
-        else:
-            st.title("📋 Your Rosters")
-            st.dataframe(riders_df[['owner', 'rider_name']])
     else:
-        st.warning("No data found. Ensure schedule.csv URLs are like: race/tour-de-france/2025")
+        st.warning("No data returned from ProCyclingStats. Ensure your schedule.csv URLs look like 'race/tour-down-under/2025'.")
 
 if __name__ == "__main__":
     main()
