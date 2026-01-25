@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
-from procyclingstats import Race, Stage
-import unicodedata
-import plotly.express as px
-from datetime import datetime
 import requests
+from bs4 import BeautifulSoup
+import unicodedata
+import time
 
 # --- 1. SETTINGS ---
-st.set_page_config(page_title="2026 Fantasy League", layout="wide")
+st.set_page_config(page_title="2026 Fantasy Cycling", layout="wide")
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -20,91 +19,91 @@ def normalize(name):
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return " ".join(sorted(name.lower().replace('-', ' ').split()))
 
-# --- 2. STEALTH SCRAPER ---
-@st.cache_data(show_spinner="Connecting to PCS (Stealth Mode)...")
-def scrape_data(schedule_df, year):
-    all_results = []
-    logs = []
+# --- 2. CUSTOM SCRAPER (The Bot-Bypasser) ---
+def get_pcs_data(path):
+    # This headers dictionary makes the app look like a real Chrome browser
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    url = f"https://www.procyclingstats.com/{path}"
     
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return None
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        results = []
+        
+        # Look for the results table (standard PCS class)
+        table = soup.find('table', class_='results')
+        if not table:
+            return None
+            
+        rows = table.find('tbody').find_all('tr')
+        for row in rows[:10]: # Only top 10
+            cols = row.find_all('td')
+            if len(cols) > 3:
+                rank = cols[0].text.strip()
+                rider = cols[3].find('a').text.strip() if cols[3].find('a') else cols[3].text.strip()
+                results.append({'rank': rank, 'rider_name': rider})
+        
+        return results
+    except Exception as e:
+        st.sidebar.error(f"Scraper Error: {e}")
+        return None
+
+# --- 3. LOGIC ---
+@st.cache_data(ttl=3600)
+def load_all_results(schedule_df):
+    all_data = []
     for _, row in schedule_df.iterrows():
-        try:
-            # Construct URL
-            base_url = row['url'].strip().strip('/')
-            url = base_url if str(year) in base_url else f"{base_url}/{year}"
-            
-            # Use the library but add a generic check
-            race = Race(url)
-            logs.append(f"Checking: {url}")
-            
-            try:
-                stages = race.stages()
-                # 2026 Update: If it's a one-day race, stages() returns empty
-                target_urls = [s['stage_url'] for s in stages] if stages else [f"{url}/result"]
-            except:
-                target_urls = [f"{url}/result"]
+        # Adjust URL for stages or results
+        # If it's a stage race, you'll need the specific stage path
+        path = f"{row['url']}/2026/result"
+        results = get_pcs_data(path)
+        
+        if results:
+            df = pd.DataFrame(results)
+            df['Race'] = row['race_name']
+            df['tier'] = row['tier']
+            all_data.append(df)
+        time.sleep(1) # Be polite to avoid IP ban
+        
+    return pd.concat(all_data) if all_data else None
 
-            for s_url in target_urls:
-                stage_data = Stage(s_url)
-                res = stage_data.results()
-                if res:
-                    df = pd.DataFrame(res)
-                    df['rank'] = pd.to_numeric(df['rank'], errors='coerce')
-                    df = df[df['rank'] <= 10].copy()
-                    df['Race Name'] = row['race_name']
-                    df['Stage'] = s_url.split('/')[-1].replace('-', ' ').title()
-                    df['tier'] = row['tier']
-                    all_results.append(df)
-                    logs.append(f"✅ Found {len(df)} results for {s_url}")
-                else:
-                    logs.append(f"⚠️ No results on page: {s_url}")
-        except Exception as e:
-            logs.append(f"❌ Error on {row['race_name']}: {e}")
-
-    final_df = pd.concat(all_results, ignore_index=True) if all_results else None
-    return final_df, logs
-
-# --- 3. UI ---
 def main():
-    st.sidebar.title("Admin")
-    year = st.sidebar.selectbox("Season", [2026, 2025])
-    
-    if st.sidebar.button("🔄 Force Sync"):
+    st.sidebar.header("Admin")
+    if st.sidebar.button("🔄 Sync Live Data"):
         st.cache_data.clear()
-        st.rerun()
-
-    # File Loader
+    
+    # Load your CSV files
     try:
         riders_df = pd.read_csv('riders.csv')
         schedule_df = pd.read_csv('schedule.csv')
-    except Exception as e:
-        st.error(f"File Error: {e}")
+    except:
+        st.error("riders.csv or schedule.csv not found!")
         return
 
-    # Scrape with Logs
-    results_raw, debug_logs = scrape_data(schedule_df, year)
+    results_raw = load_all_results(schedule_df)
 
     if results_raw is not None:
-        riders_df['match_name'] = riders_df['rider_name'].apply(normalize)
+        # Match riders and calculate points
         results_raw['match_name'] = results_raw['rider_name'].apply(normalize)
+        riders_df['match_name'] = riders_df['rider_name'].apply(normalize)
         
         merged = results_raw.merge(riders_df, on='match_name', how='inner')
         merged['pts'] = merged.apply(lambda r: SCORING.get(r['tier'], {}).get(int(r['rank']), 0), axis=1)
 
-        st.header(f"🏆 {year} Leaderboard")
-        if not merged.empty:
-            standings = merged.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
-            st.plotly_chart(px.bar(standings, x='owner', y='pts', text_auto=True))
-            st.table(standings)
-        else:
-            st.warning("Found results on PCS, but none of your riders matched. Check names in riders.csv!")
-            st.write("**Top names found in latest race:**", results_raw['rider_name'].head(5).tolist())
+        st.title("🏆 2026 Season Leaderboard")
+        standings = merged.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
+        st.table(standings)
+        
+        with st.expander("Show Raw Scraped Results"):
+            st.dataframe(results_raw)
     else:
-        st.error("No data found at all. Check the System Log below.")
-
-    # --- DEBUG LOG SECTION ---
-    with st.expander("🛠️ System Log (Click to see what's happening)"):
-        for log in debug_logs:
-            st.write(log)
+        st.warning("Still no data. Ensure your schedule.csv 'url' is like 'race/tour-down-under'")
 
 if __name__ == "__main__":
     main()
