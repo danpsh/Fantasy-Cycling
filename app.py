@@ -13,14 +13,12 @@ SCORING = {
     "Tier 3": {1: 10, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1}
 }
 
-# --- 2. HELPER FUNCTIONS ---
 def normalize_name(name):
-    """Removes accents, dashes, and extra spaces for perfect matching."""
     if not isinstance(name, str): return ""
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return name.lower().replace('-', ' ').strip()
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
@@ -28,87 +26,70 @@ def load_all_data():
         results = pd.read_excel('results.xlsx', engine='openpyxl')
         return riders, schedule, results
     except Exception as e:
-        st.error(f"Critical Error: Make sure results.xlsx, riders.csv, and schedule.csv are in GitHub. Details: {e}")
+        st.error(f"File Loading Error: {e}")
         return None, None, None
 
-# --- 3. DATA PROCESSING ---
+# --- 2. PROCESSING ---
 riders_df, schedule_df, results_raw = load_all_data()
 
 if results_raw is not None:
-    # A. Normalize Roster
+    # A. Prepare Roster
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
-    # B. Melt Excel (Wide to Long)
-    # This turns your 10 columns (1st, 2nd...) into individual rows
+    # B. Melt Results
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
-    
-    # Create a unique ID for each race entry to calculate ranks correctly
-    results_raw['Race_ID'] = range(len(results_raw)) 
+    results_raw['Race_ID'] = range(len(results_raw))
     
     df_long = results_raw.melt(
         id_vars=['Date', 'Race Name', 'Stage', 'Race_ID'], 
         value_vars=rank_cols, 
-        var_name='Pos_Label', 
-        value_name='rider_name'
+        var_name='Pos_Label', value_name='rider_name'
     )
     
-    # Extract rank number from label (e.g., '1st' -> 1)
     df_long['rank'] = df_long['Pos_Label'].str.extract('(\d+)').astype(int)
     df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
     
-    # C. Merge Tiers from Schedule
-    # Ensure schedule.csv has a 'race_name' column that matches Excel's 'Race Name'
+    # C. Merge Tier (CRITICAL STEP)
+    # This matches your Excel "Race Name" to Schedule "race_name"
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
-    # D. Merge Owners from Roster
+    # D. Merge Owner
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name']], on='match_name', how='inner')
     
-    # E. Calculate Points
-    processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
+    # E. Score calculation
+    def calculate_points(row):
+        tier_data = SCORING.get(row['tier'], {})
+        return tier_data.get(row['rank'], 0)
+
+    processed['pts'] = processed.apply(calculate_points, axis=1)
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
 
-# --- 4. NAVIGATION & UI ---
-if 'page' not in st.session_state:
-    st.session_state.page = "Dashboard"
+# --- 3. UI ---
+st.title("🏆 2026 Fantasy Leaderboard")
 
-with st.sidebar:
-    st.title("🏆 Fantasy Cycling")
-    if st.button("📊 Dashboard", use_container_width=True): st.session_state.page = "Dashboard"
-    if st.button("🚴 Team Rosters", use_container_width=True): st.session_state.page = "Rosters"
-    st.divider()
-    if st.button("🔄 Sync New Excel Data"):
-        st.cache_data.clear()
-        st.rerun()
-
-# --- 5. PAGE VIEWS ---
-if st.session_state.page == "Dashboard":
-    st.title("Season Standings")
-    
-    # Total Score Metrics
-    cols = st.columns(len(leaderboard))
-    for i, row in leaderboard.iterrows():
-        cols[i].metric(row['owner'], f"{row['pts']} pts")
-    
-    st.divider()
-    
-    # Charts and Tables
-    tab1, tab2 = st.tabs(["Performance Chart", "Detailed Results"])
-    with tab1:
-        # Cumulative score plot
-        chart_data = processed.groupby(['Date', 'owner'])['pts'].sum().reset_index()
-        chart_data = chart_data.sort_values('Date')
-        chart_data['Total'] = chart_data.groupby('owner')['pts'].cumsum()
-        fig = px.line(chart_data, x='Date', y='Total', color='owner', markers=True)
-        st.plotly_chart(fig, use_container_width=True)
+if results_raw is not None:
+    # Display Leaderboard
+    if not leaderboard.empty:
+        st.table(leaderboard.rename(columns={'owner': 'Team', 'pts': 'Total Points'}))
         
-    with tab2:
-        # Show what each rider actually scored
-        st.dataframe(processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False), hide_index=True)
+        # Plotly Chart
+        fig = px.bar(leaderboard, x='owner', y='pts', text_auto=True, color='owner')
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No matches found between Results and Roster. Check rider names!")
 
-elif st.session_state.page == "Rosters":
-    st.title("Official Team Rosters")
-    roster_cols = st.columns(2)
-    for i, owner in enumerate(riders_df['owner'].unique()):
-        with roster_cols[i % 2]:
-            st.subheader(f"Team {owner}")
-            st.table(riders_df[riders_df['owner'] == owner][['rider_name']])
+    # --- DEBUG SECTION ---
+    with st.expander("🛠️ Debugger: Why am I seeing 0 points?"):
+        st.write("### 1. Check Schedule Connection")
+        missing_tiers = df_long[df_long['tier'].isna()]['Race Name'].unique()
+        if len(missing_tiers) > 0:
+            st.error(f"These races in Excel don't match your schedule.csv: {missing_tiers}")
+        else:
+            st.success("All races matched the schedule successfully!")
+
+        st.write("### 2. Check Rider Matching")
+        st.write("Names in your Excel that are NOT in your Roster:")
+        excel_names = set(df_long['match_name'].unique())
+        roster_names = set(riders_df['match_name'].unique())
+        unmatched = excel_names - roster_names
+        st.write(list(unmatched)[:10]) # Show first 10
