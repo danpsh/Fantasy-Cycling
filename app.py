@@ -4,11 +4,9 @@ import unicodedata
 import requests
 from io import BytesIO
 
-# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="2026 Fantasy League", layout="wide")
 
-# REPLACE THIS URL with your actual GitHub Raw link!
-# To get this: Go to your excel file on GitHub -> click "Download" or "View Raw" -> copy that URL
+# Raw URL for your results.xlsx
 GITHUB_RAW_URL = "https://github.com/YOUR_USERNAME/YOUR_REPO/raw/main/results.xlsx"
 
 SCORING = {
@@ -22,50 +20,55 @@ def normalize(name):
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return " ".join(sorted(name.lower().replace('-', ' ').split()))
 
-# --- 2. DATA LOADING ---
-@st.cache_data(ttl=600) # Refreshes every 10 minutes
-def load_data():
+@st.cache_data(ttl=300)
+def load_and_process():
     try:
-        # Load Riders from local GitHub folder
+        # 1. Load Riders
         riders = pd.read_csv('riders.csv')
         riders['match_name'] = riders['rider_name'].apply(normalize)
         
-        # Load Results from GitHub URL
+        # 2. Load Wide Results from GitHub
         response = requests.get(GITHUB_RAW_URL)
-        results = pd.read_excel(BytesIO(response.content), engine='openpyxl')
-        results['match_name'] = results['rider_name'].apply(normalize)
+        wide_df = pd.read_excel(BytesIO(response.content), engine='openpyxl')
         
-        return riders, results
+        # 3. MELT: Convert Wide to Long
+        # We keep Date, Race Name, Stage, and Tier as fixed info
+        # We turn 1st, 2nd, 3rd... into a 'rank' column
+        rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
+        
+        long_df = pd.melt(
+            wide_df, 
+            id_vars=['Date', 'Race Name', 'Stage', 'Tier'], 
+            value_vars=rank_cols,
+            var_name='rank_str', 
+            value_name='rider_name'
+        )
+        
+        # Convert '1st' -> 1, '2nd' -> 2
+        long_df['rank'] = long_df['rank_str'].str.extract('(\d+)').astype(int)
+        long_df['match_name'] = long_df['rider_name'].apply(normalize)
+        
+        return riders, long_df
     except Exception as e:
-        st.error(f"Error loading files: {e}")
+        st.error(f"Error: {e}")
         return None, None
 
-# --- 3. DISPLAY ---
-st.title("🏆 2026 Fantasy League Standings")
+# --- UI DISPLAY ---
+st.title("🏆 2026 Fantasy League")
 
-riders_df, results_df = load_data()
+riders_df, results_df = load_and_process()
 
 if riders_df is not None and results_df is not None:
-    # Merge and Calculate
+    # Match riders to owners
     merged = results_df.merge(riders_df, on='match_name', how='inner')
     
-    def get_pts(row):
-        return SCORING.get(row['tier'], {}).get(int(row['rank']), 0)
+    # Apply scoring
+    merged['pts'] = merged.apply(lambda r: SCORING.get(r['Tier'], {}).get(r['rank'], 0), axis=1)
     
-    merged['pts'] = merged.apply(get_pts, axis=1)
-
-    # Standings Table
     standings = merged.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
     
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.subheader("Leaderboard")
-        st.table(standings.rename(columns={'owner': 'Team', 'pts': 'Total Points'}))
+    st.subheader("Leaderboard")
+    st.table(standings)
     
-    with col2:
-        st.subheader("Recent Points")
-        st.dataframe(merged[['rider_name_x', 'owner', 'pts']].tail(10), hide_index=True)
-
-    if st.button("🔄 Refresh Data"):
-        st.cache_data.clear()
-        st.rerun()
+    with st.expander("View individual points scored"):
+        st.dataframe(merged[['Date', 'Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']])
