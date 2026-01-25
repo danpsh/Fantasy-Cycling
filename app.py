@@ -4,12 +4,10 @@ from procyclingstats import Race, Stage
 import unicodedata
 import plotly.express as px
 from datetime import datetime
-import time
 
-# --- 1. CONFIGURATION & SCORING ---
+# --- 1. SETUP & SCORING ---
 st.set_page_config(page_title="2026 Fantasy Cycling", layout="wide")
 
-# Scoring logic for Top 10 finishes
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
     "Tier 2": {1: 20, 2: 18, 3: 16, 4: 14, 5: 12, 6: 10, 7: 8, 8: 6, 9: 4, 10: 2},
@@ -17,13 +15,11 @@ SCORING = {
 }
 
 def normalize(name):
-    """Standardizes names for matching (e.g. 'Pogačar' -> 'pogacar')"""
     if not isinstance(name, str): return ""
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
-    words = name.lower().replace('-', ' ').split()
-    return " ".join(sorted(words))
+    return " ".join(sorted(name.lower().replace('-', ' ').split()))
 
-# --- 2. THE DYNAMIC SCRAPER ---
+# --- 2. THE SCRAPER ENGINE ---
 @st.cache_data(show_spinner=False)
 def scrape_data(schedule_df, season_year):
     all_results = []
@@ -32,27 +28,21 @@ def scrape_data(schedule_df, season_year):
     
     for i, (_, row) in enumerate(schedule_df.iterrows()):
         race_name = row['race_name']
-        status_text.text(f"Searching for {race_name} ({season_year})...")
+        status_text.text(f"Checking {race_name}...")
         
         try:
-            # Clean URL and add year if missing
-            base_url = row['url'].strip()
-            # If the user didn't put a year in the CSV, we add the selected season
-            if not any(char.isdigit() for char in base_url.split('/')[-1]):
-                url = f"{base_url}/{season_year}"
-            else:
-                url = base_url
+            # Build URL (e.g., race/tour-down-under/2026)
+            base_url = row['url'].strip().strip('/')
+            url = base_url if str(season_year) in base_url else f"{base_url}/{season_year}"
             
             race = Race(url)
             
-            # Check for stages (Multi-day)
+            # Find stages (e.g., stage-1, stage-2)
             try:
                 stages = race.stages()
+                target_urls = [s['stage_url'] for s in stages] if stages else [f"{url}/result"]
             except:
-                stages = []
-
-            # Determine target URLs (all stages or the one-day result)
-            target_urls = [s['stage_url'] for s in stages] if stages else [f"{url}/result"]
+                target_urls = [f"{url}/result"]
             
             for s_url in target_urls:
                 try:
@@ -61,8 +51,7 @@ def scrape_data(schedule_df, season_year):
                     if res:
                         df = pd.DataFrame(res)
                         df['rank'] = pd.to_numeric(df['rank'], errors='coerce')
-                        df = df[df['rank'] <= 10].copy() # Keep only top 10
-                        
+                        df = df[df['rank'] <= 10].copy()
                         df['Race Name'] = race_name
                         df['Stage'] = s_url.split('/')[-1].replace('-', ' ').title()
                         df['tier'] = row['tier']
@@ -70,90 +59,60 @@ def scrape_data(schedule_df, season_year):
                         all_results.append(df)
                 except:
                     continue
-                    
-        except Exception as e:
-            st.sidebar.warning(f"Skipping {race_name}: Not yet available.")
+        except:
+            continue
         
         progress_bar.progress((i + 1) / len(schedule_df))
 
     status_text.empty()
     progress_bar.empty()
-    
     return pd.concat(all_results, ignore_index=True) if all_results else None
 
-# --- 3. MAIN INTERFACE ---
+# --- 3. MAIN APP ---
 def main():
-    st.title("🚴‍♂️ 2026 Fantasy Pro Cycling")
-    
-    # Sidebar Setup
+    st.title("🚴‍♂️ 2026 Fantasy Cycling League")
+
     with st.sidebar:
-        st.header("App Controls")
-        # Allow user to toggle seasons
-        selected_year = st.selectbox("Select Season", [2026, 2025], index=0)
-        
-        if st.button("🔄 Sync Live Results", use_container_width=True):
+        st.header("Settings")
+        year = st.selectbox("Season", [2026, 2025], index=0)
+        if st.button("🔄 Sync Results", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
-            
-        page = st.radio("Navigation", ["🏆 Leaderboard", "📊 Detailed Points", "📋 Team Rosters"])
-        st.divider()
-        st.info("The app checks for results based on the year selected above.")
+        page = st.radio("Go to:", ["Leaderboard", "Race Results", "Rosters"])
 
-    # Load local CSVs from GitHub
     try:
         riders_df = pd.read_csv('riders.csv')
         schedule_df = pd.read_csv('schedule.csv')
     except:
-        st.error("Error: Ensure riders.csv and schedule.csv are in your GitHub folder.")
+        st.error("Missing riders.csv or schedule.csv on GitHub.")
         return
 
-    # Run Scraper
-    results_raw = scrape_data(schedule_df, selected_year)
+    results_raw = scrape_data(schedule_df, year)
 
     if results_raw is not None:
-        # Prepare Data for Matching
         riders_df['match_name'] = riders_df['rider_name'].apply(normalize)
         results_raw['match_name'] = results_raw['rider_name'].apply(normalize)
         
-        # Merge Scraped Results with Owners
         merged = results_raw.merge(riders_df, on='match_name', how='inner')
         merged['pts'] = merged.apply(lambda r: SCORING.get(r['tier'], {}).get(int(r['rank']), 0), axis=1)
 
-        # --- PAGE: LEADERBOARD ---
-        if page == "🏆 Leaderboard":
+        if page == "Leaderboard":
             if not merged.empty:
                 standings = merged.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
-                
-                # Visual Chart
-                fig = px.bar(standings, x='owner', y='pts', color='owner', 
-                             labels={'owner': 'Team Owner', 'pts': 'Total Points'},
-                             text_auto=True)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Table
-                st.subheader("Current Standings")
-                st.table(standings.rename(columns={'owner': 'Team', 'pts': 'Points'}))
+                st.plotly_chart(px.bar(standings, x='owner', y='pts', color='owner', text_auto=True))
+                st.table(standings.rename(columns={'owner': 'Team Owner', 'pts': 'Total Pts'}))
             else:
-                st.warning(f"No results found for your riders in {selected_year} yet.")
+                st.info(f"No results for your riders found in {year} yet.")
 
-        # --- PAGE: DETAILED RESULTS ---
-        elif page == "📊 Detailed Points":
-            st.subheader(f"Points Breakdown ({selected_year})")
-            if not merged.empty:
-                st.dataframe(merged[['Date', 'Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']].sort_values('Date', ascending=False), 
-                             hide_index=True, use_container_width=True)
-            else:
-                st.write("No race data available.")
+        elif page == "Race Results":
+            st.dataframe(merged[['Date', 'Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']].sort_values('Date', ascending=False), hide_index=True)
 
-        # --- PAGE: ROSTERS ---
         else:
-            st.subheader("League Rosters")
             for owner in riders_df['owner'].unique():
                 with st.expander(f"Team {owner}"):
-                    team_list = riders_df[riders_df['owner'] == owner]['rider_name'].tolist()
-                    st.write(" • " + "\n • ".join(team_list))
+                    st.write(", ".join(riders_df[riders_df['owner'] == owner]['rider_name'].tolist()))
     else:
-        st.warning(f"No data found for the {selected_year} season. Try syncing or check your schedule URLs.")
+        st.warning("No data found. Ensure schedule.csv URLs look like 'race/tour-down-under'.")
 
 if __name__ == "__main__":
     main()
