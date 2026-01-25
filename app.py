@@ -51,12 +51,12 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
+    owners = sorted(riders_df['owner'].unique())
 
     # --- 3. SIDEBAR ---
     with st.sidebar:
         st.header("League Information")
         with st.expander("View Team Rosters", expanded=False):
-            owners = sorted(riders_df['owner'].unique())
             col_a, col_b = st.columns(2)
             for i, owner in enumerate(owners):
                 target_col = col_a if i % 2 == 0 else col_b
@@ -87,14 +87,15 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         st.subheader("Top 3 Scorers by Team")
         rider_totals = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
         rider_totals = rider_totals.sort_values(['owner', 'pts'], ascending=[True, False])
-        top_3 = rider_totals.groupby('owner').head(3)
         
         c1, c2 = st.columns(2)
         for i, owner in enumerate(owners):
             with (c1 if i == 0 else c2):
                 st.markdown(f"**{owner} Top Performers**")
-                team_top = top_3[top_3['owner'] == owner][['rider_name_y', 'pts']]
+                team_top = rider_totals[rider_totals['owner'] == owner][['rider_name_y', 'pts']].head(3)
                 team_top.columns = ['Rider', 'Points']
+                # Reset index to start from 1 instead of 0
+                team_top.index = range(1, len(team_top) + 1)
                 st.table(team_top)
 
         st.divider()
