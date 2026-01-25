@@ -28,14 +28,12 @@ def load_all_data():
     except Exception:
         return None, None, None
 
-# --- 2. DATA LOADING & PROCESSING ---
+# --- 2. DATA PROCESSING ---
 riders_df, schedule_df, results_raw = load_all_data()
 
 if results_raw is not None and riders_df is not None and schedule_df is not None:
-    # Prepare Roster
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
-    # Process Results (Melt Wide to Long)
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
     results_raw['Race_ID'] = range(len(results_raw))
     
@@ -48,20 +46,17 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     df_long['rank'] = df_long['Pos_Label'].str.extract('(\d+)').astype(int)
     df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
     
-    # Merge Tier and Owner
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name']], on='match_name', how='inner')
     
-    # Calculate Points
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
 
-    # --- 3. SIDEBAR (SINGLE ROSTER TAB) ---
+    # --- 3. SIDEBAR ---
     with st.sidebar:
-        st.title("🏆 League Info")
-        with st.expander("👤 View Team Rosters", expanded=False):
+        st.header("League Information")
+        with st.expander("View Team Rosters", expanded=False):
             owners = sorted(riders_df['owner'].unique())
-            # Split rosters into two small columns inside the expander
             col_a, col_b = st.columns(2)
             for i, owner in enumerate(owners):
                 target_col = col_a if i % 2 == 0 else col_b
@@ -72,12 +67,12 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
                         st.caption(f"• {r}")
         
         st.divider()
-        if st.button("🔄 Refresh Data", use_container_width=True):
+        if st.button("Refresh Data", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
     # --- 4. MAIN DASHBOARD ---
-    st.title("🥇 2026 Fantasy Standings")
+    st.title("2026 Fantasy Standings")
     
     if not leaderboard.empty:
         # Top Metrics
@@ -86,7 +81,23 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
             with (m1 if i == 0 else m2):
                 st.metric(label=f"Team {row['owner']}", value=f"{row['pts']} Pts")
 
-        st.write("---")
+        st.divider()
+
+        # Top 3 Scorers per Team
+        st.subheader("Top 3 Scorers by Team")
+        rider_totals = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
+        rider_totals = rider_totals.sort_values(['owner', 'pts'], ascending=[True, False])
+        top_3 = rider_totals.groupby('owner').head(3)
+        
+        c1, c2 = st.columns(2)
+        for i, owner in enumerate(owners):
+            with (c1 if i == 0 else c2):
+                st.markdown(f"**{owner} Top Performers**")
+                team_top = top_3[top_3['owner'] == owner][['rider_name_y', 'pts']]
+                team_top.columns = ['Rider', 'Points']
+                st.table(team_top)
+
+        st.divider()
         
         # Scoring History Table
         st.subheader("Recent Scoring Events")
@@ -95,6 +106,6 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         st.dataframe(history_df, hide_index=True, use_container_width=True)
         
     else:
-        st.info("No points recorded yet. Check your results.xlsx and ensure names match the rosters.")
+        st.info("No points recorded yet. Ensure your results.xlsx and rosters match.")
 else:
-    st.error("Missing data files. Ensure riders.csv, schedule.csv, and results.xlsx are in your GitHub repository.")
+    st.error("Data files missing. Ensure riders.csv, schedule.csv, and results.xlsx are on GitHub.")
