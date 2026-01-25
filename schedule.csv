@@ -1,58 +1,58 @@
-race_name,tier
-Omloop Nieuwsblad ME,Tier 1
-Strade Bianche,Tier 1
-Paris-Nice,Tier 1
-Tirreno-Adriatico,Tier 1
-Milano-Sanremo,Tier 1
-Ronde van Vlaanderen - Tour des Flandres,Tier 1
-Paris-Roubaix,Tier 1
-Amstel Gold Race,Tier 1
-La Flèche Wallonne,Tier 1
-Liège-Bastogne-Liège,Tier 1
-Giro d'Italia,Tier 1
-Critérium du Dauphiné,Tier 1
-Tour de France,Tier 1
-La Vuelta Ciclista a España,Tier 1
-Grand Prix Cycliste de Québec,Tier 1
-Grand Prix Cycliste de Montréal,Tier 1
-World Championship - Time Trial,Tier 1
-World Championships - Road Race,Tier 1
-Il Lombardia,Tier 1
-Volta ao Algarve em Bicicleta,Tier 2
-Kuurne - Brussel - Kuurne,Tier 2
-Volta Ciclista a Catalunya,Tier 2
-E3 Saxo Classic,Tier 2
-Gent-Wevelgem in Flanders Fields,Tier 2
-Dwars door Vlaanderen - A travers la Flandre,Tier 2
-Itzulia Basque Country,Tier 2
-Tour de Romandie,Tier 2
-Tour de Suisse,Tier 2
-Donostia San Sebastian Klasikoa,Tier 2
-Tour de Pologne,Tier 2
-ADAC Cyclassics,Tier 2
-Renewi Tour,Tier 2
-Bretagne Classic - Ouest-France,Tier 2
-SUPER 8 Classic,Tier 2
-European Continental Championships- Road Race,Tier 2
-Giro dell'Emilia,Tier 2
-Tre Valli Varesine,Tier 2
-Santos Tour Down Under,Tier 3
-Cadel Evans Great Ocean Road Race,Tier 3
-Volta a la Comunitat Valenciana,Tier 3
-UAE Tour,Tier 3
-Faun-Ardèche Classic,Tier 3
-Faun Drome Classic,Tier 3
-Classic Brugge-De Panne ME,Tier 3
-Grand Premio Miguel Indurain,Tier 3
-De Brabantse Pijl - La Flèche Brabançonne,Tier 3
-Eschborn-Frankfurt,Tier 3
-Brussels Cycling Classic,Tier 3
-Copenhagen Sprint,Tier 3
-Lidl Deutschland Tour,Tier 3
-Tour of Britain Men,Tier 3
-GP Industria & Artigianato,Tier 3
-Gran Premio città di Peccioli - Coppa Sabatini,Tier 3
-Sparkassen Münsterland Giro,Tier 3
-Gran Piemonte,Tier 3
-Paris - Tours Elite,Tier 3
-Giro del Veneto,Tier 3
+race_name,tier,url
+Omloop Nieuwsblad ME,Tier 1,race/omloop-het-nieuwsblad/2026
+Strade Bianche,Tier 1,race/strade-bianche/2026
+Paris-Nice,Tier 1,race/paris-nice/2026
+Tirreno-Adriatico,Tier 1,race/tirreno-adriatico/2026
+Milano-Sanremo,Tier 1,race/milano-sanremo/2026
+Ronde van Vlaanderen - Tour des Flandres,Tier 1,race/ronde-van-vlaanderen/2026
+Paris-Roubaix,Tier 1,race/paris-roubaix/2026
+Amstel Gold Race,Tier 1,race/amstel-gold-race/2026
+La Flèche Wallonne,Tier 1,race/la-fleche-wallonne/2026
+Liège-Bastogne-Liège,Tier 1,race/liege-bastogne-liege/2026
+Giro d'Italia,Tier 1,race/giro-d-italia/2026
+Critérium du Dauphiné,Tier 1,race/criterium-du-dauphine/2026
+Tour de France,Tier 1,race/tour-de-france/2026
+La Vuelta Ciclista a España,Tier 1,race/vuelta-a-espana/2026
+Grand Prix Cycliste de Québec,Tier 1,race/gp-quebec/2026
+Grand Prix Cycliste de Montréal,Tier 1,race/gp-montreal/2026
+World Championship - Time Trial,Tier 1,race/world-championship-itt/2026
+World Championships - Road Race,Tier 1,race/world-championship/2026
+Il Lombardia,Tier 1,race/il-lombardia/2026
+Volta ao Algarve em Bicicleta,Tier 2,race/volta-ao-algarve/2026
+Kuurne - Brussel - Kuurne,Tier 2,race/kuurne-brussel-kuurne/2026
+Volta Ciclista a Catalunya,Tier 2,race/volta-a-catalunya/2026
+E3 Saxo Classic,Tier 2,race/e3-saxo-classic/2026
+Gent-Wevelgem in Flanders Fields,Tier 2,race/gent-wevelgem/2026
+Dwars door Vlaanderen - A travers la Flandre,Tier 2,race/dwars-door-vlaanderen/2026
+Itzulia Basque Country,Tier 2,race/itzulia-basque-country/2026
+Tour de Romandie,Tier 2,race/tour-de-romandie/2026
+Tour de Suisse,Tier 2,race/tour-de-suisse/2026
+Donostia San Sebastian Klasikoa,Tier 2,race/clasica-san-sebastian/2026
+Tour de Pologne,Tier 2,race/tour-de-pologne/2026
+ADAC Cyclassics,Tier 2,race/cyclassics-hamburg/2026
+Renewi Tour,Tier 2,race/benelux-tour/2026
+Bretagne Classic - Ouest-France,Tier 2,race/bretagne-classic/2026
+SUPER 8 Classic,Tier 2,race/primus-classic/2026
+European Continental Championships- Road Race,Tier 2,race/european-championship/2026
+Giro dell'Emilia,Tier 2,race/giro-dell-emilia/2026
+Tre Valli Varesine,Tier 2,race/tre-valli-varesine/2026
+Santos Tour Down Under,Tier 3,race/tour-down-under/2026
+Cadel Evans Great Ocean Road Race,Tier 3,race/cadel-evans-great-ocean-road-race/2026
+Volta a la Comunitat Valenciana,Tier 3,race/vuelta-a-la-comunidad-valenciana/2026
+UAE Tour,Tier 3,race/uae-tour/2026
+Faun-Ardèche Classic,Tier 3,race/boucles-de-l-ardeche/2026
+Faun Drome Classic,Tier 3,race/la-drome-classic/2026
+Classic Brugge-De Panne ME,Tier 3,race/classic-brugge-de-panne/2026
+Grand Premio Miguel Indurain,Tier 3,race/gp-miguel-indurain/2026
+De Brabantse Pijl - La Flèche Brabançonne,Tier 3,race/brabantse-pijl/2026
+Eschborn-Frankfurt,Tier 3,race/eschborn-frankfurt/2026
+Brussels Cycling Classic,Tier 3,race/brussels-cycling-classic/2026
+Copenhagen Sprint,Tier 3,race/copenhagen-sprint/2026
+Lidl Deutschland Tour,Tier 3,race/deutschland-tour/2026
+Tour of Britain Men,Tier 3,race/tour-of-britain/2026
+GP Industria & Artigianato,Tier 3,race/gp-industria-articigianato/2026
+Gran Premio città di Peccioli - Coppa Sabatini,Tier 3,race/coppa-sabatini/2026
+Sparkassen Münsterland Giro,Tier 3,race/muensterland-giro/2026
+Gran Piemonte,Tier 3,race/gran-piemonte/2026
+Paris - Tours Elite,Tier 3,race/paris-tours/2026
+Giro del Veneto,Tier 3,race/giro-del-veneto/2026
