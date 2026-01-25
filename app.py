@@ -5,7 +5,29 @@ import unicodedata
 from io import BytesIO
 
 # --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="2026 Fantasy Cycling", layout="wide")
+st.set_page_config(page_title="Velocity Analytics", layout="wide")
+
+# Custom CSS for Dark Mode without a config file
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0E1117;
+        color: #FFFFFF;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #00D4FF;
+    }
+    .stButton>button {
+        background-color: #00D4FF;
+        color: #0E1117;
+        border-radius: 5px;
+    }
+    thead tr th {
+        background-color: #161B22 !important;
+        color: #00D4FF !important;
+    }
+    </style>
+    """, unsafe_allow_stdio=True)
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -55,8 +77,8 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     # --- 3. SIDEBAR ---
     with st.sidebar:
-        st.header("League Information")
-        with st.expander("View Team Rosters", expanded=False):
+        st.header("Directeur Sportif")
+        with st.expander("Team Rosters", expanded=False):
             col_a, col_b = st.columns(2)
             for i, owner in enumerate(owners):
                 target_col = col_a if i % 2 == 0 else col_b
@@ -67,46 +89,46 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
                         st.caption(f"• {r}")
         
         st.divider()
-        if st.button("Refresh Data", use_container_width=True):
+        if st.button("Refresh Telemetry", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
     # --- 4. MAIN DASHBOARD ---
-    st.title("2026 Fantasy Standings")
+    st.title("Velocity Analytics: 2026 Season")
     
     if not leaderboard.empty:
         # Top Metrics
         m1, m2 = st.columns(2)
         for i, row in leaderboard.iterrows():
             with (m1 if i == 0 else m2):
-                st.metric(label=f"Team {row['owner']}", value=f"{row['pts']} Pts")
+                st.subheader(f"Team {row['owner']}")
+                st.metric(label="Total Points", value=f"{row['pts']}")
 
         st.divider()
 
         # Top 3 Scorers per Team
-        st.subheader("Top 3 Scorers by Team")
+        st.subheader("Top Performers")
         rider_totals = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
         rider_totals = rider_totals.sort_values(['owner', 'pts'], ascending=[True, False])
         
         c1, c2 = st.columns(2)
         for i, owner in enumerate(owners):
             with (c1 if i == 0 else c2):
-                st.markdown(f"**{owner} Top Performers**")
+                st.markdown(f"**{owner} Top 3**")
                 team_top = rider_totals[rider_totals['owner'] == owner][['rider_name_y', 'pts']].head(3)
                 team_top.columns = ['Rider', 'Points']
-                # Reset index to start from 1 instead of 0
                 team_top.index = range(1, len(team_top) + 1)
                 st.table(team_top)
 
         st.divider()
         
         # Scoring History Table
-        st.subheader("Recent Scoring Events")
+        st.subheader("Race Log")
         history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
         history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
         st.dataframe(history_df, hide_index=True, use_container_width=True)
         
     else:
-        st.info("No points recorded yet. Ensure your results.xlsx and rosters match.")
+        st.info("No race data detected. Update results.xlsx to begin.")
 else:
-    st.error("Data files missing. Ensure riders.csv, schedule.csv, and results.xlsx are on GitHub.")
+    st.error("System Error: Data files missing from GitHub repository.")
