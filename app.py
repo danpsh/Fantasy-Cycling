@@ -5,7 +5,7 @@ import unicodedata
 from io import BytesIO
 
 # --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="2026 Fantasy League", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="2026 Fantasy League", layout="wide")
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -13,106 +13,102 @@ SCORING = {
     "Tier 3": {1: 10, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1}
 }
 
-# --- 2. DATA LOADING ---
+# --- 2. HELPER FUNCTIONS ---
+def normalize_name(name):
+    """Removes accents, dashes, and extra spaces for perfect matching."""
+    if not isinstance(name, str): return ""
+    name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
+    return name.lower().replace('-', ' ').strip()
+
 @st.cache_data(ttl=600)
-def load_data():
+def load_all_data():
     try:
-        # Loading local files from your repo
         riders = pd.read_csv('riders.csv')
         schedule = pd.read_csv('schedule.csv')
         results = pd.read_excel('results.xlsx', engine='openpyxl')
         return riders, schedule, results
     except Exception as e:
-        st.error(f"Error loading files: {e}")
+        st.error(f"Critical Error: Make sure results.xlsx, riders.csv, and schedule.csv are in GitHub. Details: {e}")
         return None, None, None
 
-riders_df, schedule_df, results_raw = load_data()
+# --- 3. DATA PROCESSING ---
+riders_df, schedule_df, results_raw = load_all_data()
 
-# --- 3. NAVIGATION ---
-if 'page' not in st.session_state:
-    st.session_state.page = "Dashboard"
-
-def set_page(page_name):
-    st.session_state.page = page_name
-
-with st.sidebar:
-    st.title("Navigation")
-    st.button("📊 Dashboard", use_container_width=True, on_click=set_page, args=("Dashboard",))
-    st.button("🚴 Team Rosters", use_container_width=True, on_click=set_page, args=("Team Rosters",))
-    st.divider()
-    if st.button("🔄 Sync GitHub Data"):
-        st.cache_data.clear()
-        st.rerun()
-
-# --- 4. PROCESSING LOGIC ---
-if results_raw is not None and riders_df is not None:
-    # Cleanup rider names for matching
-    riders_df['match_name'] = riders_df['rider_name'].str.strip().str.lower()
+if results_raw is not None:
+    # A. Normalize Roster
+    riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
-    # Process Wide Results to Long Format
-    results_raw['Race_Num'] = range(1, len(results_raw) + 1)
-    results_raw['Date'] = pd.to_datetime(results_raw['Date'])
-
-    # Define the ranking columns (1st through 10th)
+    # B. Melt Excel (Wide to Long)
+    # This turns your 10 columns (1st, 2nd...) into individual rows
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
     
-    # Unpivot the Excel
+    # Create a unique ID for each race entry to calculate ranks correctly
+    results_raw['Race_ID'] = range(len(results_raw)) 
+    
     df_long = results_raw.melt(
-        id_vars=['Date', 'Race Name', 'Stage', 'Race_Num'], 
+        id_vars=['Date', 'Race Name', 'Stage', 'Race_ID'], 
         value_vars=rank_cols, 
         var_name='Pos_Label', 
         value_name='rider_name'
     )
     
-    # Calculate rank and clean rider names
-    df_long['rank'] = df_long.groupby(['Race_Num']).cumcount() + 1
-    df_long['match_name'] = df_long['rider_name'].astype(str).str.strip().str.lower()
+    # Extract rank number from label (e.g., '1st' -> 1)
+    df_long['rank'] = df_long['Pos_Label'].str.extract('(\d+)').astype(int)
+    df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
     
-    # Merge with Owner info and Schedule Tiers
-    processed = df_long.merge(riders_df, on='match_name', how='inner')
-    processed = processed.merge(schedule_df, left_on='Race Name', right_on='race_name')
+    # C. Merge Tiers from Schedule
+    # Ensure schedule.csv has a 'race_name' column that matches Excel's 'Race Name'
+    df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
-    # Calculate points based on Tier and Rank
+    # D. Merge Owners from Roster
+    processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name']], on='match_name', how='inner')
+    
+    # E. Calculate Points
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
 
-    # --- PAGE 1: DASHBOARD ---
-    if st.session_state.page == "Dashboard":
-        st.title("🏆 2026 Fantasy Cycling Dashboard")
+# --- 4. NAVIGATION & UI ---
+if 'page' not in st.session_state:
+    st.session_state.page = "Dashboard"
+
+with st.sidebar:
+    st.title("🏆 Fantasy Cycling")
+    if st.button("📊 Dashboard", use_container_width=True): st.session_state.page = "Dashboard"
+    if st.button("🚴 Team Rosters", use_container_width=True): st.session_state.page = "Rosters"
+    st.divider()
+    if st.button("🔄 Sync New Excel Data"):
+        st.cache_data.clear()
+        st.rerun()
+
+# --- 5. PAGE VIEWS ---
+if st.session_state.page == "Dashboard":
+    st.title("Season Standings")
+    
+    # Total Score Metrics
+    cols = st.columns(len(leaderboard))
+    for i, row in leaderboard.iterrows():
+        cols[i].metric(row['owner'], f"{row['pts']} pts")
+    
+    st.divider()
+    
+    # Charts and Tables
+    tab1, tab2 = st.tabs(["Performance Chart", "Detailed Results"])
+    with tab1:
+        # Cumulative score plot
+        chart_data = processed.groupby(['Date', 'owner'])['pts'].sum().reset_index()
+        chart_data = chart_data.sort_values('Date')
+        chart_data['Total'] = chart_data.groupby('owner')['pts'].cumsum()
+        fig = px.line(chart_data, x='Date', y='Total', color='owner', markers=True)
+        st.plotly_chart(fig, use_container_width=True)
         
-        # Top Metrics
-        m1, m2 = st.columns(2)
-        for i, owner in enumerate(leaderboard['owner']):
-            pts = leaderboard[leaderboard['owner'] == owner]['pts'].values[0]
-            with (m1 if i == 0 else m2):
-                st.metric(label=f"Team {owner}", value=f"{pts} pts")
+    with tab2:
+        # Show what each rider actually scored
+        st.dataframe(processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False), hide_index=True)
 
-        st.divider()
-
-        tab1, tab2, tab3 = st.tabs(["Standings Graph", "Top Riders", "Race History"])
-        
-        with tab1:
-            # Cumulative points over time
-            chart_data = processed.groupby(['Race_Num', 'owner'])['pts'].sum().reset_index()
-            chart_data['Total Points'] = chart_data.groupby('owner')['pts'].cumsum()
-            fig = px.line(chart_data, x="Race_Num", y="Total Points", color="owner", markers=True)
-            st.plotly_chart(fig, use_container_width=True)
-
-        with tab2:
-            rider_pts = processed.groupby(['rider_name_x', 'owner'])['pts'].sum().sort_values(ascending=False).reset_index()
-            st.table(rider_pts.head(10).rename(columns={'rider_name_x': 'Rider', 'owner': 'Team', 'pts': 'Total'}))
-
-        with tab3:
-            history = processed.sort_values('Date', ascending=False)
-            st.dataframe(history[['Date', 'Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']], use_container_width=True, hide_index=True)
-
-    # --- PAGE 2: TEAM ROSTERS ---
-    elif st.session_state.page == "Team Rosters":
-        st.title("🚴 Team Rosters")
-        c1, c2 = st.columns(2)
-        owners = sorted(riders_df['owner'].unique())
-        for i, owner in enumerate(owners):
-            with (c1 if i == 0 else c2):
-                st.header(f"Team {owner}")
-                team = riders_df[riders_df['owner'] == owner][['rider_name']].reset_index(drop=True)
-                st.table(team)
+elif st.session_state.page == "Rosters":
+    st.title("Official Team Rosters")
+    roster_cols = st.columns(2)
+    for i, owner in enumerate(riders_df['owner'].unique()):
+        with roster_cols[i % 2]:
+            st.subheader(f"Team {owner}")
+            st.table(riders_df[riders_df['owner'] == owner][['rider_name']])
