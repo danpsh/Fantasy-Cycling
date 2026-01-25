@@ -3,9 +3,9 @@ import pandas as pd
 import unicodedata
 
 # --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="2026 Fantasy Cycling", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="collapsed")
 
-# CSS to hide the sidebar and clean up the header
+# Hide sidebar and header
 st.markdown("""
     <style>
         [data-testid="stSidebar"] {display: none;}
@@ -51,14 +51,14 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name']], on='match_name', how='inner')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     
-    # Totals
+    # Aggregates
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     rider_points = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
 
-    # --- 3. DASHBOARD ---
+    # --- 3. MAIN DASHBOARD ---
     st.title("2026 Fantasy Standings")
     
-    # Totals at the top
+    # Team Totals
     m1, m2 = st.columns(2)
     for i, name in enumerate(["Tanner", "Daniel"]):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -67,28 +67,29 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # RECENT RESULTS FIRST
-    st.subheader("Recent Results")
-    if not processed.empty:
-        history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
-        history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
-        st.dataframe(history_df, hide_index=True, use_container_width=True)
-    else:
-        st.info("No race results yet.")
-
-    st.divider()
-
-    # TOP 3 SCORERS (Numbered 1, 2, 3)
+    # TOP 3 SCORERS SECTION
     st.subheader("Top 3 Scorers")
     t1, t2 = st.columns(2)
     for i, name in enumerate(["Tanner", "Daniel"]):
         with (t1 if i == 0 else t2):
-            st.write(f"**{name}'s MVPs**")
+            st.markdown(f"**{name}'s MVPs**")
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
             top3.columns = ['Rider', 'Points']
-            # Set index to 1, 2, 3
             top3.index = range(1, len(top3) + 1)
             st.table(top3)
+
+    st.divider()
+
+    # RECENT RESULTS SECTION (Formatted Date)
+    st.subheader("Recent Results")
+    if not processed.empty:
+        history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
+        # Format Date to Month-Day only
+        history_df['Date'] = pd.to_datetime(history_df['Date']).dt.strftime('%m-%d')
+        history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
+        st.dataframe(history_df, hide_index=True, use_container_width=True)
+    else:
+        st.info("No race results recorded yet.")
 
     st.divider()
 
@@ -114,6 +115,5 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     if st.button("Refresh Results"):
         st.cache_data.clear()
         st.rerun()
-
 else:
-    st.error("Missing data files on GitHub.")
+    st.error("Data files missing from GitHub.")
