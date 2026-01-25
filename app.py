@@ -50,36 +50,41 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     # --- 3. DASHBOARD ---
     st.title("2026 Fantasy Standings")
     
-    # Metrics
+    # Metrics (Tanner Left, Daniel Right)
     m1, m2 = st.columns(2)
-    for i, name in enumerate(["Daniel", "Tanner"]):
+    for i, name in enumerate(["Tanner", "Daniel"]):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
         with (m1 if i == 0 else m2):
             st.metric(label=f"Team {name}", value=f"{score} Pts")
 
     st.divider()
 
-    # --- 4. THE MASTER SIDE-BY-SIDE TABLE (FULL LENGTH) ---
+    # --- 4. THE MASTER SIDE-BY-SIDE TABLE ---
     st.subheader("Master Roster Comparison")
 
-    # Get Daniel's riders in original order
-    dan_df = riders_df[riders_df['owner'] == 'Daniel'].copy().reset_index(drop=True)
-    dan_df = dan_df.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
-
-    # Get Tanner's riders in original order
+    # Get Tanner's riders
     tan_df = riders_df[riders_df['owner'] == 'Tanner'].copy().reset_index(drop=True)
     tan_df = tan_df.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
 
+    # Get Daniel's riders
+    dan_df = riders_df[riders_df['owner'] == 'Daniel'].copy().reset_index(drop=True)
+    dan_df = dan_df.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
+
     # Combine into one side-by-side dataframe
+    # Counting starts at 1
+    max_len = max(len(dan_df), len(tan_df))
     master_table = pd.DataFrame({
-        "Team Daniel": dan_df['rider_name'],
-        "Daniel Pts": dan_df['pts'].astype(int),
+        "#": range(1, max_len + 1),
         "Team Tanner": tan_df['rider_name'],
-        "Tanner Pts": tan_df['pts'].astype(int)
+        "Tanner Pts": tan_df['pts'].astype(int),
+        "Team Daniel": dan_df['rider_name'],
+        "Daniel Pts": dan_df['pts'].astype(int)
     })
 
-    # Using st.table instead of st.dataframe makes it full length without internal scrolling
-    st.table(master_table)
+    # Display using st.dataframe with height adjusted to prevent scrolling
+    # (Approx 35 pixels per row + header)
+    table_height = (max_len + 1) * 36
+    st.dataframe(master_table, hide_index=True, use_container_width=True, height=table_height)
 
     st.divider()
 
