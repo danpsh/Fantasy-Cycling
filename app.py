@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 from procyclingstats import Race, Stage
 import unicodedata
+import plotly.express as px
 
-# --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="Fantasy Cycling 2026", layout="wide")
+# --- SETTINGS & SCORING ---
+st.set_page_config(page_title="2026 Fantasy League", layout="wide")
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -17,15 +18,14 @@ def normalize(name):
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return " ".join(sorted(name.lower().replace('-', ' ').split()))
 
-# --- 2. DATA SCRAPER ---
-@st.cache_data(show_spinner="Syncing 2026 Race Results...")
+# --- DATA SCRAPER ---
+@st.cache_data(show_spinner="Updating 2026 Results...")
 def scrape_data(schedule_df):
     all_results = []
     for _, row in schedule_df.iterrows():
         try:
             race = Race(row['url'])
             stages = race.stages()
-            # If multi-day, get all stages; if one-day, get the result URL
             urls = [s['stage_url'] for s in stages] if stages else [row['url']]
             
             for s_url in urls:
@@ -44,50 +44,48 @@ def scrape_data(schedule_df):
             continue
     return pd.concat(all_results, ignore_index=True) if all_results else None
 
-# --- 3. APP LOGIC ---
+# --- MAIN APP ---
 def main():
-    # Sidebar Controls
     with st.sidebar:
-        st.title("Settings")
-        if st.button("🔄 Sync Results (Manual)", use_container_width=True):
+        st.header("Admin")
+        if st.button("🔄 Sync Results", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
-        st.info("Results are stored in cache. Sync only when a race finishes.")
-        
-        page = st.radio("Navigation", ["Leaderboard", "Rosters"])
+        st.divider()
+        page = st.radio("Go to", ["Leaderboard", "Detailed Results", "Rosters"])
 
-    # Load Files
     try:
         riders_df = pd.read_csv('riders.csv')
         schedule_df = pd.read_csv('schedule.csv')
         results_raw = scrape_data(schedule_df)
     except Exception as e:
-        st.error(f"Please ensure riders.csv and schedule.csv are in your GitHub folder. Error: {e}")
+        st.error(f"Missing CSV files in GitHub! Error: {e}")
         return
 
     if results_raw is not None:
         riders_df['match_name'] = riders_df['rider_name'].apply(normalize)
         results_raw['match_name'] = results_raw['rider_name'].apply(normalize)
-        
-        # Merge Scraped Results with Owners
         final_df = results_raw.merge(riders_df, on='match_name', how='inner')
         final_df['pts'] = final_df.apply(lambda r: SCORING.get(r['tier'], {}).get(int(r['rank']), 0), axis=1)
 
         if page == "Leaderboard":
-            st.title("🏆 2026 Fantasy Leaderboard")
+            st.title("🏆 League Standings")
             standings = final_df.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
+            fig = px.bar(standings, x='owner', y='pts', color='owner', title="Total Points by Owner")
+            st.plotly_chart(fig, use_container_width=True)
             st.table(standings)
-            
-            st.subheader("Recent Points Earned")
-            st.dataframe(final_df[['Date', 'Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']].sort_values('Date', ascending=False), hide_index=True)
+
+        elif page == "Detailed Results":
+            st.title("📊 All Stage Points")
+            st.dataframe(final_df[['Date', 'Race Name', 'Stage', 'rider_name_x', 'owner', 'pts']].sort_values('Date', ascending=False))
 
         else:
-            st.title("📋 Team Rosters")
+            st.title("📋 Rosters")
             for owner in riders_df['owner'].unique():
                 st.subheader(f"Team {owner}")
                 st.write(", ".join(riders_df[riders_df['owner'] == owner]['rider_name'].tolist()))
     else:
-        st.warning("Click 'Sync Results' to pull data for the first time.")
+        st.info("No data yet. Hit the Sync button in the sidebar to fetch 2026 results!")
 
 if __name__ == "__main__":
     main()
