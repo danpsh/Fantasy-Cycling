@@ -50,7 +50,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     # --- 3. DASHBOARD ---
     st.title("2026 Fantasy Standings")
     
-    # Leaderboard Metrics
+    # Metrics
     m1, m2 = st.columns(2)
     for i, name in enumerate(["Daniel", "Tanner"]):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -59,16 +59,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # Recent Results Table
-    st.subheader("Recent Results")
-    if not processed.empty:
-        history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
-        history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
-        st.dataframe(history_df, hide_index=True, use_container_width=True)
-
-    st.divider()
-
-    # --- 4. THE MASTER SIDE-BY-SIDE TABLE ---
+    # --- 4. THE MASTER SIDE-BY-SIDE TABLE (FULL LENGTH) ---
     st.subheader("Master Roster Comparison")
 
     # Get Daniel's riders in original order
@@ -80,7 +71,6 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     tan_df = tan_df.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
 
     # Combine into one side-by-side dataframe
-    # We use join to put them in columns A, B, C, D
     master_table = pd.DataFrame({
         "Team Daniel": dan_df['rider_name'],
         "Daniel Pts": dan_df['pts'].astype(int),
@@ -88,11 +78,21 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         "Tanner Pts": tan_df['pts'].astype(int)
     })
 
-    st.dataframe(master_table, hide_index=True, use_container_width=True)
+    # Using st.table instead of st.dataframe makes it full length without internal scrolling
+    st.table(master_table)
+
+    st.divider()
+
+    # Recent Results Table
+    st.subheader("Recent Results")
+    if not processed.empty:
+        history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
+        history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
+        st.dataframe(history_df, hide_index=True, use_container_width=True)
 
     if st.sidebar.button("Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
 else:
-    st.error("Missing data files on GitHub (riders.csv, schedule.csv, results.xlsx).")
+    st.error("Missing data files on GitHub.")
