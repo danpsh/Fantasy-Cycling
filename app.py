@@ -3,15 +3,13 @@ import pandas as pd
 import unicodedata
 
 # --- 1. SETTINGS & SCORING ---
-# Setting initial_sidebar_state to "collapsed" and using CSS to hide it entirely
 st.set_page_config(page_title="2026 Fantasy Cycling", layout="wide", initial_sidebar_state="collapsed")
 
-# CSS to permanently hide the sidebar and clean up the UI
+# Hide sidebar and header completely
 st.markdown("""
     <style>
         [data-testid="stSidebar"] {display: none;}
         [data-testid="stHeader"] {background: rgba(0,0,0,0);}
-        .stMetric {background-color: #f0f2f6; padding: 10px; border-radius: 10px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -60,7 +58,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     # --- 3. MAIN DASHBOARD ---
     st.title("2026 Fantasy Standings")
     
-    # Main Score Metrics
+    # Clean Team Totals (No weird boxes)
     m1, m2 = st.columns(2)
     for i, name in enumerate(["Tanner", "Daniel"]):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -70,11 +68,11 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     st.divider()
 
     # TOP 3 SCORERS SECTION
-    st.subheader("🏆 Top 3 Scorers Per Team")
+    st.subheader("Top 3 Scorers")
     t1, t2 = st.columns(2)
     for i, name in enumerate(["Tanner", "Daniel"]):
         with (t1 if i == 0 else t2):
-            st.write(f"**{name}'s MVPs**")
+            st.markdown(f"**{name}'s MVPs**")
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
             top3.columns = ['Rider', 'Points']
             st.table(top3)
@@ -82,7 +80,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     st.divider()
 
     # RECENT RESULTS SECTION
-    st.subheader("⏱️ Recent Results")
+    st.subheader("Recent Results")
     if not processed.empty:
         history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
         history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
@@ -93,7 +91,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     st.divider()
 
     # --- 4. MASTER ROSTER COMPARISON ---
-    st.subheader("📋 Master Roster")
+    st.subheader("Master Roster")
 
     tan_df = riders_df[riders_df['owner'] == 'Tanner'].copy().reset_index(drop=True)
     tan_df = tan_df.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
@@ -110,13 +108,12 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         "Points": dan_df['pts'].astype(int)
     })
 
-    # Displaying full length table
     st.dataframe(master_table, hide_index=True, use_container_width=True, height=(max_len + 1) * 36)
 
-    # Refresh Button (Moved to bottom of page since sidebar is gone)
-    if st.button("Refresh Data"):
+    # Refresh Button
+    if st.button("Refresh Telemetry"):
         st.cache_data.clear()
         st.rerun()
 
 else:
-    st.error("Missing data files on GitHub.")
+    st.error("Data files missing from GitHub.")
