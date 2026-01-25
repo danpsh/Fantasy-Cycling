@@ -28,14 +28,14 @@ def load_all_data():
     except Exception:
         return None, None, None
 
-# --- 2. DATA PROCESSING ---
+# --- 2. DATA LOADING & PROCESSING ---
 riders_df, schedule_df, results_raw = load_all_data()
 
 if results_raw is not None and riders_df is not None and schedule_df is not None:
     # Prepare Roster
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
-    # Process Results
+    # Process Results (Melt Wide to Long)
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
     results_raw['Race_ID'] = range(len(results_raw))
     
@@ -56,22 +56,28 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
 
-    # --- 3. SIDEBAR (TEAM ROSTERS) ---
+    # --- 3. SIDEBAR (SINGLE ROSTER TAB) ---
     with st.sidebar:
-        st.title("🏆 Teams & Rosters")
-        owners = sorted(riders_df['owner'].unique())
-        for owner in owners:
-            with st.expander(f"Team {owner}", expanded=True):
-                team_list = riders_df[riders_df['owner'] == owner]['rider_name'].tolist()
-                for r in team_list:
-                    st.write(f"• {r}")
+        st.title("🏆 League Info")
+        with st.expander("👤 View Team Rosters", expanded=False):
+            owners = sorted(riders_df['owner'].unique())
+            # Split rosters into two small columns inside the expander
+            col_a, col_b = st.columns(2)
+            for i, owner in enumerate(owners):
+                target_col = col_a if i % 2 == 0 else col_b
+                with target_col:
+                    st.markdown(f"**{owner}**")
+                    team_list = riders_df[riders_df['owner'] == owner]['rider_name'].tolist()
+                    for r in team_list:
+                        st.caption(f"• {r}")
+        
         st.divider()
-        if st.sidebar.button("🔄 Sync GitHub Data"):
+        if st.button("🔄 Refresh Data", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
     # --- 4. MAIN DASHBOARD ---
-    st.title("📊 2026 Fantasy Leaderboard")
+    st.title("🥇 2026 Fantasy Standings")
     
     if not leaderboard.empty:
         # Top Metrics
@@ -80,19 +86,15 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
             with (m1 if i == 0 else m2):
                 st.metric(label=f"Team {row['owner']}", value=f"{row['pts']} Pts")
 
-        # History and Charts
-        st.divider()
-        tab1, tab2 = st.tabs(["Performance Chart", "Scoring History"])
+        st.write("---")
         
-        with tab1:
-            chart_data = processed.groupby(['Date', 'owner'])['pts'].sum().reset_index().sort_values('Date')
-            chart_data['Total'] = chart_data.groupby('owner')['pts'].cumsum()
-            fig = px.line(chart_data, x='Date', y='Total', color='owner', markers=True, template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
-            
-        with tab2:
-            st.dataframe(processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False), hide_index=True, use_container_width=True)
+        # Scoring History Table
+        st.subheader("Recent Scoring Events")
+        history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
+        history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
+        st.dataframe(history_df, hide_index=True, use_container_width=True)
+        
     else:
-        st.warning("Data loaded, but no points scored yet. Ensure Rider Names in Excel match your Roster exactly!")
+        st.info("No points recorded yet. Check your results.xlsx and ensure names match the rosters.")
 else:
-    st.error("Missing files on GitHub. Please ensure riders.csv, schedule.csv, and results.xlsx are present.")
+    st.error("Missing data files. Ensure riders.csv, schedule.csv, and results.xlsx are in your GitHub repository.")
