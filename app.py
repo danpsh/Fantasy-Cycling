@@ -30,6 +30,8 @@ def load_all_data():
 riders_df, schedule_df, results_raw = load_all_data()
 
 if results_raw is not None and riders_df is not None and schedule_df is not None:
+    # Add an 'original_index' to keep the CSV order
+    riders_df['original_index'] = range(len(riders_df))
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
     # Process Results
@@ -45,15 +47,14 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     
     # Calculate Totals
-    leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
+    leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     rider_points = processed.groupby('rider_name_y')['pts'].sum().reset_index()
 
     # --- 3. DASHBOARD ---
     st.title("2026 Fantasy Standings")
     
-    # Standings Metrics
+    # Standings Metrics (Fixed Columns: Daniel Left, Tanner Right)
     m1, m2 = st.columns(2)
-    # Note: This keeps columns static (Daniel Left, Tanner Right)
     for i, name in enumerate(["Daniel", "Tanner"]):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
         with (m1 if i == 0 else m2):
@@ -70,21 +71,25 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- 4. FULL ROSTERS AS TABLES ---
-    st.subheader("Team Rosters & Rider Performance")
+    # --- 4. FULL ROSTERS AS TABLES (FIXED ORDER) ---
+    st.subheader("Team Rosters")
     r_col1, r_col2 = st.columns(2)
     
     for i, owner_name in enumerate(["Daniel", "Tanner"]):
         with (r_col1 if i == 0 else r_col2):
             st.write(f"**Team {owner_name}**")
-            # Get riders for this owner
-            team_riders = riders_df[riders_df['owner'] == owner_name][['rider_name']].copy()
-            # Merge with points (fill 0 for riders with no points yet)
-            team_table = team_riders.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
-            team_table = team_table[['rider_name', 'pts']].sort_values('pts', ascending=False)
-            team_table.columns = ['Rider', 'Total Pts']
             
-            st.dataframe(team_table, hide_index=True, use_container_width=True)
+            # Filter riders and keep original CSV order
+            team_riders = riders_df[riders_df['owner'] == owner_name].sort_values('original_index')
+            
+            # Merge with points (keeping the original_index order)
+            team_table = team_riders.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
+            
+            # Clean up the display table
+            display_table = team_table[['rider_name', 'pts']].copy()
+            display_table.columns = ['Rider', 'Total Pts']
+            
+            st.dataframe(display_table, hide_index=True, use_container_width=True)
 
     if st.sidebar.button("Refresh Data", use_container_width=True):
         st.cache_data.clear()
