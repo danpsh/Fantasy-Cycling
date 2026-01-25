@@ -71,18 +71,16 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     dan_df = dan_df.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
 
     # Combine into one side-by-side dataframe
-    # Counting starts at 1
     max_len = max(len(dan_df), len(tan_df))
     master_table = pd.DataFrame({
         "#": range(1, max_len + 1),
         "Team Tanner": tan_df['rider_name'],
-        "Tanner Pts": tan_df['pts'].astype(int),
+        "Points ": tan_df['pts'].astype(int), # Space added to differentiate name
         "Team Daniel": dan_df['rider_name'],
-        "Daniel Pts": dan_df['pts'].astype(int)
+        "Points": dan_df['pts'].astype(int)
     })
 
-    # Display using st.dataframe with height adjusted to prevent scrolling
-    # (Approx 35 pixels per row + header)
+    # Auto-height calculation
     table_height = (max_len + 1) * 36
     st.dataframe(master_table, hide_index=True, use_container_width=True, height=table_height)
 
