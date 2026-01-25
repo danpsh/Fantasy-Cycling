@@ -1,49 +1,9 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import unicodedata
-from io import BytesIO
 
 # --- 1. SETTINGS & SCORING ---
-st.set_page_config(page_title="Le Peloton: 2026 Season", layout="wide")
-
-# Custom CSS for Tour de France Style (Yellow & Charcoal)
-st.markdown("""
-    <style>
-    /* Main Background */
-    .stApp {
-        background-color: #FFFFFF;
-    }
-    /* Metric Labels */
-    div[data-testid="stMetricLabel"] p {
-        color: #333333 !important;
-        font-weight: bold !important;
-        text-transform: uppercase;
-    }
-    /* Metric Values (Yellow Accent) */
-    div[data-testid="stMetricValue"] > div {
-        color: #FFD700 !important;
-        text-shadow: 1px 1px 2px #00000022;
-    }
-    /* Buttons */
-    .stButton>button {
-        background-color: #FFD700 !important;
-        color: #000000 !important;
-        font-weight: bold !important;
-        border: 2px solid #000000 !important;
-    }
-    /* Sidebar styling */
-    section[data-testid="stSidebar"] {
-        background-color: #F3F3F3;
-        border-right: 5px solid #FFD700;
-    }
-    /* Tables Header */
-    thead tr th {
-        background-color: #FFD700 !important;
-        color: #000000 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+st.set_page_config(page_title="2026 Fantasy Cycling", layout="wide")
 
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
@@ -93,57 +53,57 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     # --- 3. SIDEBAR ---
     with st.sidebar:
-        st.header("Directeur Sportif")
-        with st.expander("Team Rosters", expanded=False):
+        st.header("League Info")
+        with st.expander("View Team Rosters"):
             col_a, col_b = st.columns(2)
             for i, owner in enumerate(owners):
                 target_col = col_a if i % 2 == 0 else col_b
                 with target_col:
-                    st.markdown(f"**{owner}**")
+                    st.write(f"**{owner}**")
                     team_list = riders_df[riders_df['owner'] == owner]['rider_name'].tolist()
                     for r in team_list:
-                        st.caption(f"• {r}")
+                        st.text(f"• {r}")
         
         st.divider()
-        if st.button("Refresh Results", use_container_width=True):
+        if st.button("Refresh Data", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
     # --- 4. MAIN DASHBOARD ---
-    st.title("Classement Général: 2026")
+    st.title("2026 Fantasy Standings")
     
     if not leaderboard.empty:
         # Top Metrics
         m1, m2 = st.columns(2)
         for i, row in leaderboard.iterrows():
             with (m1 if i == 0 else m2):
-                st.metric(label=f"Team {row['owner']}", value=f"{row['pts']} PTS")
+                st.metric(label=f"Team {row['owner']}", value=f"{row['pts']} Pts")
 
         st.divider()
 
         # Top 3 Scorers per Team
-        st.subheader("Les Meilleurs Coureurs")
+        st.subheader("Top 3 Scorers per Team")
         rider_totals = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
         rider_totals = rider_totals.sort_values(['owner', 'pts'], ascending=[True, False])
         
         c1, c2 = st.columns(2)
         for i, owner in enumerate(owners):
             with (c1 if i == 0 else c2):
-                st.markdown(f"**{owner} Top 3**")
+                st.write(f"**{owner} Top Performers**")
                 team_top = rider_totals[rider_totals['owner'] == owner][['rider_name_y', 'pts']].head(3)
-                team_top.columns = ['Coureur', 'Points']
+                team_top.columns = ['Rider', 'Points']
                 team_top.index = range(1, len(team_top) + 1)
                 st.table(team_top)
 
         st.divider()
         
         # Scoring History Table
-        st.subheader("Journal de Course")
+        st.subheader("Recent Results")
         history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
         history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
         st.dataframe(history_df, hide_index=True, use_container_width=True)
         
     else:
-        st.info("No race results recorded. Check your files on GitHub.")
+        st.info("No points recorded yet.")
 else:
-    st.error("Missing GitHub data: riders.csv, schedule.csv, or results.xlsx.")
+    st.error("Error: Check if results.xlsx, riders.csv, and schedule.csv are on GitHub.")
