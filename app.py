@@ -49,22 +49,10 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     leaderboard = processed.groupby('owner')['pts'].sum().sort_values(ascending=False).reset_index()
-    owners = sorted(riders_df['owner'].unique())
 
-    # --- 3. SIDEBAR ---
+    # --- 3. SIDEBAR (CLEAN) ---
     with st.sidebar:
-        st.header("League Info")
-        with st.expander("View Team Rosters"):
-            col_a, col_b = st.columns(2)
-            for i, owner in enumerate(owners):
-                target_col = col_a if i % 2 == 0 else col_b
-                with target_col:
-                    st.write(f"**{owner}**")
-                    team_list = riders_df[riders_df['owner'] == owner]['rider_name'].tolist()
-                    for r in team_list:
-                        st.text(f"• {r}")
-        
-        st.divider()
+        st.header("Settings")
         if st.button("Refresh Data", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
@@ -73,7 +61,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     st.title("2026 Fantasy Standings")
     
     if not leaderboard.empty:
-        # Top Metrics
+        # Leaderboard Metrics
         m1, m2 = st.columns(2)
         for i, row in leaderboard.iterrows():
             with (m1 if i == 0 else m2):
@@ -87,10 +75,11 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         rider_totals = rider_totals.sort_values(['owner', 'pts'], ascending=[True, False])
         
         c1, c2 = st.columns(2)
-        for i, owner in enumerate(owners):
+        # We manually use Daniel and Tanner names here
+        for i, name in enumerate(["Daniel", "Tanner"]):
             with (c1 if i == 0 else c2):
-                st.write(f"**{owner} Top Performers**")
-                team_top = rider_totals[rider_totals['owner'] == owner][['rider_name_y', 'pts']].head(3)
+                st.write(f"**Team {name} Top Performers**")
+                team_top = rider_totals[rider_totals['owner'] == name][['rider_name_y', 'pts']].head(3)
                 team_top.columns = ['Rider', 'Points']
                 team_top.index = range(1, len(team_top) + 1)
                 st.table(team_top)
@@ -102,6 +91,24 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
         history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
         st.dataframe(history_df, hide_index=True, use_container_width=True)
+
+        st.divider()
+
+        # --- 5. FULL ROSTERS AT BOTTOM ---
+        st.subheader("Full Team Rosters")
+        r_col1, r_col2 = st.columns(2)
+        
+        with r_col1:
+            st.markdown("### Team Daniel")
+            dan_riders = riders_df[riders_df['owner'] == "Daniel"]['rider_name'].tolist()
+            for r in sorted(dan_riders):
+                st.text(f"• {r}")
+
+        with r_col2:
+            st.markdown("### Team Tanner")
+            tan_riders = riders_df[riders_df['owner'] == "Tanner"]['rider_name'].tolist()
+            for r in sorted(tan_riders):
+                st.text(f"• {r}")
         
     else:
         st.info("No points recorded yet.")
