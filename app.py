@@ -101,19 +101,20 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     
     # Aggregates
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
-    # Determine the leader for dynamic display
+    
+    # Dynamic display order based on leader
     if not leaderboard.empty:
         leader_row = leaderboard.sort_values('pts', ascending=False)
         display_order = leader_row['owner'].tolist()
     else:
-        display_order = ["Daniel", "Tanner"]
+        display_order = ["Tanner", "Daniel"]
 
     rider_points = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
 
     # --- 4. MAIN DASHBOARD ---
     st.title("🏆 2026 Fantasy Standings")
     
-    # Dynamic Leader Metrics (Winner shows first)
+    # Metric Columns (Leader first)
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -122,7 +123,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- UPCOMING SCHEDULE ---
+    # UPCOMING SCHEDULE (5 RACES)
     st.subheader("🗓️ Next 5 Upcoming Races")
     today = pd.Timestamp(datetime.now().date())
     upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(5)
@@ -136,7 +137,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # Top 3 Scorers (Winner shows first)
+    # TOP 3 SCORERS (Leader first)
     st.subheader("⭐ Top 3 Scorers")
     t1, t2 = st.columns(2)
     for i, name in enumerate(display_order):
@@ -164,26 +165,25 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- 5. MASTER ROSTER (Tanner fixed on Left for Draft Order) ---
+    # --- 5. MASTER ROSTER (Tanner fixed on Left) ---
     st.subheader("📋 Master Roster")
     
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
     
-    # Tanner's Data
     tan_roster = master_roster[master_roster['owner'] == 'Tanner'].sort_values('pts', ascending=False)
-    # Daniel's Data
     dan_roster = master_roster[master_roster['owner'] == 'Daniel'].sort_values('pts', ascending=False)
 
     max_len = max(len(dan_roster), len(tan_roster))
     
-    # Hard-coded column order: Tanner (Left), Daniel (Right)
+    # Clean headers as requested
     final_df = pd.DataFrame({
-        "Tanner's Rider": tan_roster['rider_name'].tolist() + [""] * (max_len - len(tan_roster)),
+        "Tanner": tan_roster['rider_name'].tolist() + [""] * (max_len - len(tan_roster)),
         "Points ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
-        "Daniel's Rider": dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster)),
+        "Daniel": dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster)),
         "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
     
+    # Auto-height calculation
     table_height = (max_len + 1) * 36
 
     st.dataframe(
