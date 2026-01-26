@@ -3,7 +3,7 @@ import pandas as pd
 import unicodedata
 from datetime import datetime
 
-# --- 1. SETTINGS & SCORING ---
+# --- 1. SETTINGS ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="expanded")
 
 SCORING = {
@@ -32,31 +32,22 @@ def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
         schedule = pd.read_csv('schedule.csv')
+        # Results should now include a 'Stage' column (can be empty for one-day races)
         results = pd.read_excel('results.xlsx', engine='openpyxl')
         return riders, schedule, results
     except Exception:
         return None, None, None
 
-# --- 3. DATA LOGIC (Robust Date Handling) ---
+# --- 3. DATA LOGIC ---
 riders_df, schedule_df, results_raw = load_all_data()
 
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
-    # Robust Date Parsing for Schedule
-    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'], errors='coerce')
-    # Filter out rows that failed to parse or are in the past
-    today = pd.Timestamp(datetime.now().date())
-    valid_schedule = schedule_df.dropna(subset=['date_dt'])
-    upcoming_df = valid_schedule[valid_schedule['date_dt'] >= today].sort_values('date_dt')
-    
-    # Robust Date Parsing for Results
-    results_raw['Date_dt'] = pd.to_datetime(results_raw['Date'], errors='coerce')
-    results_raw = results_raw.dropna(subset=['Date_dt'])
-    
     # Process Results
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
-    id_cols = ['Date_dt', 'Race Name']
+    # Melt while keeping Stage info
+    id_cols = ['Date', 'Race Name']
     if 'Stage' in results_raw.columns:
         id_cols.append('Stage')
         
@@ -64,13 +55,16 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     df_long['rank'] = df_long['Pos_Label'].str.extract(r'(\d+)').astype(int)
     df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
     
-    # Join with schedule for tiers
-    df_long = df_long.merge(valid_schedule[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
+    df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name']], on='match_name', how='inner')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
-    display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist() if not leaderboard.empty else ["Tanner", "Daniel"]
+    if not leaderboard.empty:
+        display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist()
+    else:
+        display_order = ["Tanner", "Daniel"]
+        
     rider_points = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
 
 # --- 4. PAGE FUNCTIONS ---
@@ -78,7 +72,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
 def show_dashboard():
     st.title("2026 Fantasy Standings")
     
-    # Top Level Metrics (Dynamic sorting)
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -87,7 +80,6 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION: TOP SCORERS (Leader first)
     st.subheader("Top Scorers")
     t1, t2 = st.columns(2)
     for i, name in enumerate(display_order):
@@ -103,21 +95,25 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION: RECENT RESULTS (With dedicated Stage column)
+    # SECTION 2: RECENT RESULTS (With Stage # and Abbreviations)
     st.subheader("Recent Results")
     if not processed.empty:
-        recent = processed.sort_values(['Date_dt', 'pts'], ascending=[False, False]).head(12).copy()
-        recent['Date_Disp'] = recent['Date_dt'].dt.strftime('%b %d')
-        recent['rider_name_y'] = recent['rider_name_y'].apply(shorten_name)
-        recent['Race Name'] = recent['Race Name'].apply(lambda x: limit_text(x, 18))
+        recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(12).copy()
+        recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
         
-        if 'Stage' in recent.columns:
-            recent['Stg'] = recent['Stage'].apply(lambda x: f"S{int(x)}" if pd.notnull(x) and str(x).replace('.0','').isdigit() else "-")
-        else:
-            recent['Stg'] = "-"
+        # Combine Race Name + Stage
+        def format_race(row):
+            base = limit_text(row['Race Name'], 18)
+            if 'Stage' in row and pd.notnull(row['Stage']):
+                # Force stage to int if it's a number
+                stg = int(row['Stage']) if isinstance(row['Stage'], (int, float)) else row['Stage']
+                return f"{base} (S{stg})"
+            return base
 
-        recent_disp = recent[['Date_Disp', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
-        recent_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Points']
+        recent['Display Race'] = recent.apply(format_race, axis=1)
+        recent_disp = recent[['Date', 'Display Race', 'rider_name_y', 'pts']].copy()
+        recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
+        recent_disp.columns = ['Date', 'Race', 'Rider', 'Points']
         
         st.dataframe(
             recent_disp, 
@@ -126,9 +122,8 @@ def show_dashboard():
             column_config={
                 "Date": st.column_config.TextColumn(width=70),
                 "Points": st.column_config.NumberColumn(width=60),
-                "Race": st.column_config.TextColumn(width=160),
-                "Stg": st.column_config.TextColumn(width=45),
-                "Rider": st.column_config.TextColumn(width=130),
+                "Race": st.column_config.TextColumn(width=180),
+                "Rider": st.column_config.TextColumn(width=140),
             }
         )
     else:
@@ -136,39 +131,29 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION: NEXT 5 UPCOMING RACES (Automatically filters out Santos TDU)
+    # SECTION 3: NEXT 5 RACES
     st.subheader("Next 5 Upcoming Races")
-    if not upcoming_df.empty:
-        next_5 = upcoming_df.head(5).copy()
-        next_5['T'] = next_5['tier'].str.replace('Tier ', '', case=False)
-        next_5['Race'] = next_5['race_name'].apply(lambda x: limit_text(x, 25))
-        # Keep original date string for display or use dt format
-        next_5['Date_Disp'] = next_5['date_dt'].dt.strftime('%b %d')
-        next_5_disp = next_5[['Race', 'Date_Disp', 'T']]
-        next_5_disp.columns = ['Race', 'Date', 'T']
-        
-        st.dataframe(
-            next_5_disp, 
-            hide_index=True, 
-            use_container_width=False, 
-            column_config={
-                "Date": st.column_config.TextColumn(width=100),
-                "T": st.column_config.TextColumn(width=40),
-                "Race": st.column_config.TextColumn(width=220),
-            }
-        )
-    else:
-        st.write("No more races scheduled for 2026.")
+    next_5 = schedule_df[['race_name', 'date', 'tier']].head(5).copy()
+    next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
+    next_5['race_name'] = next_5['race_name'].apply(lambda x: limit_text(x, 25))
+    next_5.columns = ['Race', 'Date', 'T']
+    st.dataframe(
+        next_5, 
+        hide_index=True, 
+        use_container_width=False, 
+        column_config={
+            "Date": st.column_config.TextColumn(width=120),
+            "T": st.column_config.TextColumn(width=40),
+            "Race": st.column_config.TextColumn(width=220),
+        }
+    )
 
 def show_roster():
     st.title("Master Roster")
-    st.write("Rosters shown in original draft order.")
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
     master_roster['short_name'] = master_roster['rider_name'].apply(shorten_name)
-    
     tan_roster = master_roster[master_roster['owner'] == 'Tanner']
     dan_roster = master_roster[master_roster['owner'] == 'Daniel']
-    
     max_len = max(len(tan_roster), len(dan_roster))
     roster_comp = pd.DataFrame({
         "Tanner": tan_roster['short_name'].tolist() + [""] * (max_len - len(tan_roster)),
@@ -182,22 +167,15 @@ def show_roster():
 
 def show_schedule():
     st.title("Full 2026 Schedule")
-    full_sched = schedule_df.copy()
+    full_sched = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     full_sched['tier'] = full_sched['tier'].str.replace('Tier ', '', case=False)
-    # Ensure date display is clean
-    full_sched['date'] = pd.to_datetime(full_sched['date'], errors='coerce').dt.strftime('%Y-%m-%d')
-    full_sched = full_sched[['date', 'race_name', 'tier', 'race_type']]
     full_sched.columns = ['Date', 'Race', 'T', 'Type']
     st.dataframe(full_sched, hide_index=True, use_container_width=False,
         column_config={"Date": st.column_config.TextColumn(width=120), "Race": st.column_config.TextColumn(width=250),
                        "T": st.column_config.TextColumn(width=40), "Type": st.column_config.TextColumn(width=150)})
 
 # --- 5. NAVIGATION ---
-pg = st.navigation([
-    st.Page(show_dashboard, title="Dashboard"),
-    st.Page(show_roster, title="Master Roster"),
-    st.Page(show_schedule, title="Full Schedule")
-])
+pg = st.navigation([st.Page(show_dashboard, title="Dashboard"), st.Page(show_roster, title="Master Roster"), st.Page(show_schedule, title="Full Schedule")])
 
 with st.sidebar:
     if st.button("Refresh Data"):
