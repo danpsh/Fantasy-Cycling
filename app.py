@@ -3,7 +3,7 @@ import pandas as pd
 import unicodedata
 from datetime import datetime
 
-# --- 1. SETTINGS & SCORING ---
+# --- 1. SETTINGS ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="expanded")
 
 SCORING = {
@@ -33,21 +33,18 @@ def load_all_data():
     except Exception:
         return None, None, None
 
-# --- 3. SHARED DATA LOGIC ---
+# --- 3. DATA LOGIC ---
 riders_df, schedule_df, results_raw = load_all_data()
 
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
-    
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
     df_long = results_raw.melt(id_vars=['Date', 'Race Name'], value_vars=rank_cols, var_name='Pos_Label', value_name='rider_name')
     df_long['rank'] = df_long['Pos_Label'].str.extract(r'(\d+)').astype(int)
     df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
-    
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name']], on='match_name', how='inner')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
-    
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist() if not leaderboard.empty else ["Tanner", "Daniel"]
     rider_points = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
@@ -70,56 +67,53 @@ def show_dashboard():
     owners = ["Tanner", "Daniel"]
     for i, name in enumerate(owners):
         with (t1 if i == 0 else t2):
-            st.markdown(f"**{name} Top Performers**")
+            st.markdown(f"**{name} Top 3**")
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
             if not top3.empty:
                 top3['rider_name_y'] = top3['rider_name_y'].apply(shorten_name)
                 top3.columns = ['Rider', 'Pts']
-                st.table(top3)
+                st.table(top3) # Table is already compact
             else:
-                st.write("No points scored yet.")
+                st.write("No points yet.")
 
     st.divider()
 
-    # SECTION 2: RECENT RESULTS (With Autofit Logic)
+    # SECTION 2: RECENT RESULTS (Shrunk Columns)
     st.subheader("Recent Results")
     if not processed.empty:
         recent = processed.sort_values('Date', ascending=False).head(10).copy()
         recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
         recent_disp = recent[['Date', 'Race Name', 'rider_name_y', 'pts']].copy()
         recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
-        recent_disp.columns = ['Date', 'Race', 'Rider', 'Points']
+        recent_disp.columns = ['Date', 'Race', 'Rider', 'Pts']
         
-        # Using column_config to simulate autofit
         st.dataframe(
             recent_disp, 
             hide_index=True, 
-            use_container_width=True,
+            use_container_width=False, # This stops the stretching
             column_config={
-                "Date": st.column_config.TextColumn(width="small"),
-                "Points": st.column_config.NumberColumn(width="small"),
-                "Race": st.column_config.TextColumn(width="medium"),
-                "Rider": st.column_config.TextColumn(width="medium"),
+                "Date": st.column_config.TextColumn(width=70),
+                "Pts": st.column_config.NumberColumn(width=50),
+                "Race": st.column_config.TextColumn(width=200),
+                "Rider": st.column_config.TextColumn(width=150),
             }
         )
-    else:
-        st.write("Waiting for the first race results.")
 
     st.divider()
 
-    # SECTION 3: NEXT 5 RACES (With Autofit Logic)
+    # SECTION 3: NEXT 5 RACES (Shrunk Columns)
     st.subheader("Next 5 Upcoming Races")
     next_5 = schedule_df[['race_name', 'date', 'tier']].head(5).copy()
     next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
-    next_5.columns = ['Race', 'Date', 'Tier']
+    next_5.columns = ['Race', 'Date', 'T']
     st.dataframe(
         next_5, 
         hide_index=True, 
-        use_container_width=True,
+        use_container_width=False, 
         column_config={
-            "Date": st.column_config.TextColumn(width="medium"),
-            "Tier": st.column_config.TextColumn(width="small"),
-            "Race": st.column_config.TextColumn(width="large"),
+            "Date": st.column_config.TextColumn(width=120),
+            "T": st.column_config.TextColumn(width=40),
+            "Race": st.column_config.TextColumn(width=250),
         }
     )
 
@@ -139,11 +133,13 @@ def show_roster():
     st.dataframe(
         roster_comp, 
         hide_index=True, 
-        use_container_width=True, 
+        use_container_width=False, 
         height=(max_len + 1) * 36,
         column_config={
-            "Pts ": st.column_config.NumberColumn(width="small"),
-            "Pts": st.column_config.NumberColumn(width="small"),
+            "Tanner": st.column_config.TextColumn(width=150),
+            "Pts ": st.column_config.NumberColumn(width=50),
+            "Daniel": st.column_config.TextColumn(width=150),
+            "Pts": st.column_config.NumberColumn(width=50),
         }
     )
 
@@ -151,14 +147,24 @@ def show_schedule():
     st.title("Full 2026 Schedule")
     full_sched = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     full_sched['tier'] = full_sched['tier'].str.replace('Tier ', '', case=False)
-    full_sched.columns = ['Date', 'Race', 'Tier', 'Type']
-    st.dataframe(full_sched, hide_index=True, use_container_width=True)
+    full_sched.columns = ['Date', 'Race', 'T', 'Type']
+    st.dataframe(
+        full_sched, 
+        hide_index=True, 
+        use_container_width=False,
+        column_config={
+            "Date": st.column_config.TextColumn(width=120),
+            "Race": st.column_config.TextColumn(width=250),
+            "T": st.column_config.TextColumn(width=40),
+            "Type": st.column_config.TextColumn(width=150),
+        }
+    )
 
 # --- 5. NAVIGATION ---
 pg = st.navigation([
-    st.Page(show_dashboard, title="Dashboard", url_path="dashboard"),
-    st.Page(show_roster, title="Master Roster", url_path="roster"),
-    st.Page(show_schedule, title="Full Schedule", url_path="schedule")
+    st.Page(show_dashboard, title="Dashboard"),
+    st.Page(show_roster, title="Master Roster"),
+    st.Page(show_schedule, title="Full Schedule")
 ])
 
 with st.sidebar:
