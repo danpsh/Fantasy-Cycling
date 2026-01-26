@@ -7,6 +7,7 @@ import difflib
 # --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="collapsed")
 
+# Hide default Streamlit elements
 st.markdown("""
     <style>
         [data-testid="stSidebar"] {display: none;}
@@ -115,18 +116,18 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # UPCOMING RACES SECTION
+    # --- UPCOMING SCHEDULE SECTION (Updated) ---
     st.subheader("🗓️ Upcoming Schedule")
     today = pd.Timestamp(datetime.now().date())
     upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(3)
     
     if not upcoming.empty:
-        # We iterate and show by Tier header
-        for tier, group in upcoming.groupby('tier', sort=False):
-            st.markdown(f"### {tier}")
-            display_group = group[['date_assigned', 'race_name']].copy()
-            display_group.columns = ['Date', 'Race Name']
-            st.table(display_group)
+        # Create a display table with headers and hide the index
+        upcoming_display = upcoming[['date_assigned', 'race_name', 'tier']].copy()
+        upcoming_display.columns = ['Date', 'Race Name', 'Tier']
+        
+        # Display as a clean table without row numbers
+        st.dataframe(upcoming_display, hide_index=True, use_container_width=True)
     else:
         st.info("No upcoming races found.")
 
@@ -160,7 +161,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- 5. MASTER ROSTER ---
+    # --- MASTER ROSTER ---
     st.subheader("📋 Master Roster")
     
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
@@ -175,7 +176,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         "Daniel's Rider": dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster)),
         "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
-    # Displaying without index column
+    
     st.dataframe(final_df, use_container_width=True, hide_index=True)
 
     if st.button("Refresh Results"):
