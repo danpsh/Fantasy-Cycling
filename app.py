@@ -63,6 +63,15 @@ def normalize_name(name):
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return name.lower().replace('-', ' ').strip()
 
+def shorten_name(name):
+    """Converts 'Jonas Vingegaard' to 'J. Vingegaard'"""
+    if not isinstance(name, str) or not name.strip():
+        return ""
+    parts = name.split()
+    if len(parts) > 1:
+        return f"{parts[0][0]}. {' '.join(parts[1:])}"
+    return name
+
 def get_closest_date(race_name):
     official_names = list(UCI_2026_CALENDAR.keys())
     match = difflib.get_close_matches(race_name, official_names, n=1, cutoff=0.6)
@@ -102,7 +111,6 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     # Aggregates
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     
-    # Dynamic display order based on leader
     if not leaderboard.empty:
         leader_row = leaderboard.sort_values('pts', ascending=False)
         display_order = leader_row['owner'].tolist()
@@ -114,7 +122,6 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     # --- 4. MAIN DASHBOARD ---
     st.title("🏆 2026 Fantasy Standings")
     
-    # Metric Columns (Leader first)
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -137,7 +144,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # TOP 3 SCORERS (Leader first)
+    # TOP 3 SCORERS
     st.subheader("⭐ Top 3 Scorers")
     t1, t2 = st.columns(2)
     for i, name in enumerate(display_order):
@@ -145,6 +152,8 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
             st.markdown(f"**{name}**")
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
             if not top3.empty:
+                # Apply name shortening for Top 3 Scorers as well
+                top3['rider_name_y'] = top3['rider_name_y'].apply(shorten_name)
                 top3.columns = ['Rider', 'Points']
                 top3.index = range(1, len(top3) + 1)
                 st.table(top3)
@@ -158,6 +167,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     if not processed.empty:
         history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
         history_df['Date'] = pd.to_datetime(history_df['Date']).dt.strftime('%m-%d')
+        history_df['rider_name_y'] = history_df['rider_name_y'].apply(shorten_name)
         history_df.columns = ['Date', 'Race', 'Stage', 'Rider', 'Owner', 'Points']
         st.dataframe(history_df, hide_index=True, use_container_width=True)
     else:
@@ -165,25 +175,26 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- 5. MASTER ROSTER (Tanner fixed on Left) ---
+    # --- 5. MASTER ROSTER (Shrunk Names, Tanner fixed on Left) ---
     st.subheader("📋 Master Roster")
     
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
+    
+    # Shorten names for the master table
+    master_roster['short_name'] = master_roster['rider_name'].apply(shorten_name)
     
     tan_roster = master_roster[master_roster['owner'] == 'Tanner'].sort_values('pts', ascending=False)
     dan_roster = master_roster[master_roster['owner'] == 'Daniel'].sort_values('pts', ascending=False)
 
     max_len = max(len(dan_roster), len(tan_roster))
     
-    # Clean headers as requested
     final_df = pd.DataFrame({
-        "Tanner": tan_roster['rider_name'].tolist() + [""] * (max_len - len(tan_roster)),
-        "Points ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
-        "Daniel": dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster)),
-        "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
+        "Tanner": tan_roster['short_name'].tolist() + [""] * (max_len - len(tan_roster)),
+        "Pts ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
+        "Daniel": dan_roster['short_name'].tolist() + [""] * (max_len - len(dan_roster)),
+        "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
     
-    # Auto-height calculation
     table_height = (max_len + 1) * 36
 
     st.dataframe(
