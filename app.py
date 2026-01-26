@@ -7,7 +7,6 @@ import difflib
 # --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="collapsed")
 
-# Hide default Streamlit elements
 st.markdown("""
     <style>
         [data-testid="stSidebar"] {display: none;}
@@ -116,17 +115,14 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- UPCOMING SCHEDULE SECTION (Updated) ---
+    # --- UPCOMING SCHEDULE SECTION ---
     st.subheader("🗓️ Upcoming Schedule")
     today = pd.Timestamp(datetime.now().date())
     upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(3)
     
     if not upcoming.empty:
-        # Create a display table with headers and hide the index
         upcoming_display = upcoming[['date_assigned', 'race_name', 'tier']].copy()
         upcoming_display.columns = ['Date', 'Race Name', 'Tier']
-        
-        # Display as a clean table without row numbers
         st.dataframe(upcoming_display, hide_index=True, use_container_width=True)
     else:
         st.info("No upcoming races found.")
@@ -161,7 +157,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- MASTER ROSTER ---
+    # --- 5. MASTER ROSTER (FULL HEIGHT, NO SCROLL) ---
     st.subheader("📋 Master Roster")
     
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
@@ -177,7 +173,15 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
     
-    st.dataframe(final_df, use_container_width=True, hide_index=True)
+    # CALCULATE HEIGHT: Header (approx 35px) + (number of rows * 35px) + padding
+    table_height = (max_len + 1) * 35 + 5
+
+    st.dataframe(
+        final_df, 
+        use_container_width=True, 
+        hide_index=True, 
+        height=table_height
+    )
 
     if st.button("Refresh Results"):
         st.cache_data.clear()
