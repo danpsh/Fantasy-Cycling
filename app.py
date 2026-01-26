@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from datetime import datetime
-import difflib  # Built-in library for fuzzy matching
+import difflib
 
 # --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="collapsed")
@@ -20,7 +20,7 @@ SCORING = {
     "Tier 3": {1: 10, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1}
 }
 
-# --- 2. 2026 UCI WORLD TOUR CALENDAR REFERENCE ---
+# --- 2. 2026 UCI CALENDAR REFERENCE ---
 UCI_2026_CALENDAR = {
     "Tour Down Under": "2026-01-20",
     "Cadel Evans Great Ocean Road Race": "2026-02-01",
@@ -64,7 +64,6 @@ def normalize_name(name):
     return name.lower().replace('-', ' ').strip()
 
 def get_closest_date(race_name):
-    """Finds the date for a race even if spelling isn't perfect."""
     official_names = list(UCI_2026_CALENDAR.keys())
     match = difflib.get_close_matches(race_name, official_names, n=1, cutoff=0.6)
     if match:
@@ -85,10 +84,8 @@ def load_all_data():
 riders_df, schedule_df, results_raw = load_all_data()
 
 if results_raw is not None and riders_df is not None and schedule_df is not None:
-    # AUTO-ASSIGN DATES to your schedule.csv
     schedule_df['date_assigned'] = schedule_df['race_name'].apply(get_closest_date)
     schedule_df['date_dt'] = pd.to_datetime(schedule_df['date_assigned'])
-    
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
     # Process Results
@@ -119,18 +116,19 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     st.divider()
 
     # UPCOMING RACES SECTION
-    st.subheader("🗓️ Next 3 Upcoming Races")
+    st.subheader("🗓️ Upcoming Schedule")
     today = pd.Timestamp(datetime.now().date())
-    
-    # Filter for future races that actually have an assigned date
     upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(3)
     
     if not upcoming.empty:
-        upcoming_display = upcoming[['date_assigned', 'race_name', 'tier']].copy()
-        upcoming_display.columns = ['Date', 'Race Name', 'Tier']
-        st.table(upcoming_display)
+        # We iterate and show by Tier header
+        for tier, group in upcoming.groupby('tier', sort=False):
+            st.markdown(f"### {tier}")
+            display_group = group[['date_assigned', 'race_name']].copy()
+            display_group.columns = ['Date', 'Race Name']
+            st.table(display_group)
     else:
-        st.info("No upcoming races found in your schedule list for the rest of 2026.")
+        st.info("No upcoming races found.")
 
     st.divider()
 
@@ -165,9 +163,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     # --- 5. MASTER ROSTER ---
     st.subheader("📋 Master Roster")
     
-    # Process for side-by-side display
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
-    
     tan_roster = master_roster[master_roster['owner'] == 'Tanner'].sort_values('pts', ascending=False)
     dan_roster = master_roster[master_roster['owner'] == 'Daniel'].sort_values('pts', ascending=False)
 
@@ -179,6 +175,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         "Daniel's Rider": dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster)),
         "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
+    # Displaying without index column
     st.dataframe(final_df, use_container_width=True, hide_index=True)
 
     if st.button("Refresh Results"):
