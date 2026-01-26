@@ -110,11 +110,11 @@ def show_dashboard():
             hide_index=True, 
             use_container_width=True,
             column_config={
-                "Date": st.column_config.TextColumn(width="small"),
-                "Race": st.column_config.TextColumn(width="medium"),
-                "Stg": st.column_config.TextColumn(width="small"),
-                "Rider": st.column_config.TextColumn(width="medium"),
-                "Points": st.column_config.NumberColumn(width="small"),
+                "Date": st.column_config.TextColumn(width=100),
+                "Race": st.column_config.TextColumn(width=250),
+                "Stg": st.column_config.TextColumn(width=60),
+                "Rider": st.column_config.TextColumn(width=180),
+                "Points": st.column_config.NumberColumn(width=80),
             }
         )
     else:
@@ -136,9 +136,9 @@ def show_dashboard():
         hide_index=True, 
         use_container_width=True, 
         column_config={
-            "Date": st.column_config.TextColumn(width="medium"), # Expanded date
-            "Tier": st.column_config.TextColumn(width="small"),
-            "Race": st.column_config.TextColumn(width="large"),
+            "Date": st.column_config.TextColumn(width=180),
+            "Tier": st.column_config.TextColumn(width=80),
+            "Race": st.column_config.TextColumn(width=300),
         }
     )
 
@@ -157,14 +157,21 @@ def show_roster():
         "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
     
-    # use_container_width=True expanded the table to the full screen width
-    st.dataframe(roster_comp, hide_index=True, use_container_width=True,
+    # Calculate height: ~35px per row + ~40px for header
+    dynamic_height = (len(roster_comp) + 1) * 35 + 5
+
+    st.dataframe(
+        roster_comp, 
+        hide_index=True, 
+        use_container_width=True,
+        height=dynamic_height, # This removes the internal scrollbar
         column_config={
-            "Tanner": st.column_config.TextColumn(width="150"), 
-            "Points ": st.column_config.NumberColumn(width="50"),
-            "Daniel": st.column_config.TextColumn(width="150"), 
-            "Points": st.column_config.NumberColumn(width="50")
-        })
+            "Tanner": st.column_config.TextColumn(width=250), 
+            "Points ": st.column_config.NumberColumn(width=80),
+            "Daniel": st.column_config.TextColumn(width=250), 
+            "Points": st.column_config.NumberColumn(width=80)
+        }
+    )
 
 def show_schedule():
     st.title("Full 2026 Schedule")
@@ -174,10 +181,10 @@ def show_schedule():
     
     st.dataframe(full_sched, hide_index=True, use_container_width=True,
         column_config={
-            "Date": st.column_config.TextColumn(width="100"), # Expanded to fit full text
-            "Race": st.column_config.TextColumn(width="300"),
-            "Tier": st.column_config.TextColumn(width="small"), 
-            "Type": st.column_config.TextColumn(width="medium")
+            "Date": st.column_config.TextColumn(width=180),
+            "Race": st.column_config.TextColumn(width=300),
+            "Tier": st.column_config.TextColumn(width=80), 
+            "Type": st.column_config.TextColumn(width=150)
         })
 
 # --- 5. NAVIGATION ---
@@ -193,12 +200,3 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
-
-
-
-
-
-
-
-
-
