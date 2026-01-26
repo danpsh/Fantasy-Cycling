@@ -122,10 +122,20 @@ def show_dashboard():
 
     st.divider()
 
+    # SECTION 3: NEXT 5 RACES
     st.subheader("Next 5 Upcoming Races")
-    future_races = schedule_df[pd.to_datetime(schedule_df['date']) >= datetime.now()].head(5).copy()
+    
+    # Convert schedule dates to datetime objects for accurate filtering
+    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'])
+    
+    # Filter for races happening today or in the future
+    # .date() ensures we compare only the calendar day
+    today = datetime.now().date()
+    future_races = schedule_df[schedule_df['date_dt'].dt.date >= today].head(5).copy()
+    
     if future_races.empty:
-        future_races = schedule_df.head(5).copy()
+        # Fallback to last 5 if no future races remain
+        future_races = schedule_df.tail(5).copy()
         
     next_5 = future_races[['race_name', 'date', 'tier']].copy()
     next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
@@ -136,9 +146,9 @@ def show_dashboard():
         hide_index=True, 
         use_container_width=True, 
         column_config={
-            "Date": st.column_config.TextColumn(width=180),
-            "Tier": st.column_config.TextColumn(width=80),
-            "Race": st.column_config.TextColumn(width=300),
+            "Date": st.column_config.TextColumn(width=150),
+            "Tier": st.column_config.TextColumn(width=60),
+            "Race": st.column_config.TextColumn(width=400),
         }
     )
 
@@ -200,6 +210,7 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
+
 
 
 
