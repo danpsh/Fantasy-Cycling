@@ -166,10 +166,10 @@ def show_roster():
         use_container_width=True,
         height=dynamic_height, # This removes the internal scrollbar
         column_config={
-            "Tanner": st.column_config.TextColumn(width=150), 
-            "Points ": st.column_config.NumberColumn(width=80),
-            "Daniel": st.column_config.TextColumn(width=150), 
-            "Points": st.column_config.NumberColumn(width=80)
+            "Tanner": st.column_config.TextColumn(width=100), 
+            "Points ": st.column_config.NumberColumn(width=50),
+            "Daniel": st.column_config.TextColumn(width=100), 
+            "Points": st.column_config.NumberColumn(width=50)
         }
     )
 
@@ -200,4 +200,5 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
+
 
