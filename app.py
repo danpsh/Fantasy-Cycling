@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import unicodedata
+from datetime import datetime
 
 # --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="collapsed")
@@ -43,7 +44,7 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     # Process Results
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
     df_long = results_raw.melt(id_vars=['Date', 'Race Name', 'Stage'], value_vars=rank_cols, var_name='Pos_Label', value_name='rider_name')
-    df_long['rank'] = df_long['Pos_Label'].str.extract('(\d+)').astype(int)
+    df_long['rank'] = df_long['Pos_Label'].str.extract(r'(\d+)').astype(int)
     df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
     
     # Merge and Points
@@ -72,11 +73,28 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     t1, t2 = st.columns(2)
     for i, name in enumerate(["Tanner", "Daniel"]):
         with (t1 if i == 0 else t2):
-            st.markdown(f"**Team {name}**") # Removed "MVPs"
+            st.markdown(f"**Team {name}**")
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
             top3.columns = ['Rider', 'Points']
             top3.index = range(1, len(top3) + 1)
             st.table(top3)
+
+    st.divider()
+
+    # UPCOMING RACES SECTION
+    st.subheader("🗓️ Next 3 Upcoming Races")
+    # Convert 'date' column to datetime (adjust column name if it's 'Date' in your CSV)
+    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'])
+    today = pd.Timestamp(datetime.now().date())
+    
+    upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(3)
+    
+    if not upcoming.empty:
+        upcoming_display = upcoming[['date', 'race_name', 'tier']].copy()
+        upcoming_display.columns = ['Date', 'Race Name', 'Tier']
+        st.dataframe(upcoming_display, hide_index=True, use_container_width=True)
+    else:
+        st.info("No upcoming races found in the schedule.")
 
     st.divider()
 
@@ -94,19 +112,34 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     # --- 4. MASTER ROSTER ---
     st.subheader("Master Roster")
-    tan_df = riders_df[riders_df['owner'] == 'Tanner'].copy().reset_index(drop=True)
-    tan_df = tan_df.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
+    
+    # Process Tanner's Roster
+    tan_roster = riders_df[riders_df['owner'] == 'Tanner'].copy()
+    tan_roster = tan_roster.merge(rider_points[rider_points['owner'] == 'Tanner'], 
+                                 left_on='rider_name', right_on='rider_name_y', 
+                                 how='left').fillna(0)
+    
+    # Process Daniel's Roster
+    dan_roster = riders_df[riders_df['owner'] == 'Daniel'].copy()
+    dan_roster = dan_roster.merge(rider_points[rider_points['owner'] == 'Daniel'], 
+                                 left_on='rider_name', right_on='rider_name_y', 
+                                 how='left').fillna(0)
 
-    dan_df = riders_df[riders_df['owner'] == 'Daniel'].copy().reset_index(drop=True)
-    dan_df = dan_df.merge(rider_points, left_on='rider_name', right_on='rider_name_y', how='left').fillna(0)
+    # Align lengths for side-by-side display
+    max_len = max(len(dan_roster), len(tan_roster))
+    
+    # Prepare display columns (ensuring we handle potential empty rosters)
+    tan_names = tan_roster['rider_name'].tolist() + [""] * (max_len - len(tan_roster))
+    tan_pts = tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster))
+    dan_names = dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster))
+    dan_pts = dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
 
-    max_len = max(len(dan_df), len(tan_df))
     master_table = pd.DataFrame({
         "#": range(1, max_len + 1),
-        "Team Tanner": tan_df['rider_name'],
-        "Points ": tan_df['pts'].astype(int), 
-        "Team Daniel": dan_df['rider_name'],
-        "Points": dan_df['pts'].astype(int)
+        "Team Tanner": tan_names,
+        "Points ": tan_pts, 
+        "Team Daniel": dan_names,
+        "Points": dan_pts
     })
 
     st.dataframe(master_table, hide_index=True, use_container_width=True, height=(max_len + 1) * 36)
@@ -115,4 +148,4 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         st.cache_data.clear()
         st.rerun()
 else:
-    st.error("Missing data files.")
+    st.error("Missing data files. Please ensure riders.csv, schedule.csv, and results.xlsx are in the directory.")
