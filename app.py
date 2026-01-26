@@ -160,10 +160,10 @@ def show_roster():
     # use_container_width=True expanded the table to the full screen width
     st.dataframe(roster_comp, hide_index=True, use_container_width=True,
         column_config={
-            "Tanner": st.column_config.TextColumn(width="small"), 
-            "Points ": st.column_config.NumberColumn(width="small"),
-            "Daniel": st.column_config.TextColumn(width="small"), 
-            "Points": st.column_config.NumberColumn(width="small")
+            "Tanner": st.column_config.TextColumn(width="150"), 
+            "Points ": st.column_config.NumberColumn(width="50"),
+            "Daniel": st.column_config.TextColumn(width="150"), 
+            "Points": st.column_config.NumberColumn(width="50")
         })
 
 def show_schedule():
@@ -193,6 +193,7 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
+
 
 
 
