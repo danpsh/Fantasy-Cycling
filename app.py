@@ -32,7 +32,6 @@ def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
         schedule = pd.read_csv('schedule.csv')
-        # Results should now include a 'Stage' column (can be empty for one-day races)
         results = pd.read_excel('results.xlsx', engine='openpyxl')
         return riders, schedule, results
     except Exception:
@@ -46,7 +45,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     
     # Process Results
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
-    # Melt while keeping Stage info
     id_cols = ['Date', 'Race Name']
     if 'Stage' in results_raw.columns:
         id_cols.append('Stage')
@@ -95,25 +93,29 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION 2: RECENT RESULTS (With Stage # and Abbreviations)
+    # SECTION 2: RECENT RESULTS (With Stage as a separate column)
     st.subheader("Recent Results")
     if not processed.empty:
-        recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(12).copy()
+        recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(15).copy()
         recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
         
-        # Combine Race Name + Stage
-        def format_race(row):
-            base = limit_text(row['Race Name'], 18)
-            if 'Stage' in row and pd.notnull(row['Stage']):
-                # Force stage to int if it's a number
-                stg = int(row['Stage']) if isinstance(row['Stage'], (int, float)) else row['Stage']
-                return f"{base} (S{stg})"
-            return base
+        # Format Stage column
+        def format_stage(val):
+            if pd.isna(val) or val == "":
+                return "—"
+            try:
+                # Converts float 1.0 to int 1, then to string S1
+                return f"S{int(float(val))}"
+            except:
+                return str(val)
 
-        recent['Display Race'] = recent.apply(format_race, axis=1)
-        recent_disp = recent[['Date', 'Display Race', 'rider_name_y', 'pts']].copy()
+        recent['Stg'] = recent['Stage'].apply(format_stage) if 'Stage' in recent.columns else "—"
+        
+        recent_disp = recent[['Date', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
         recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
-        recent_disp.columns = ['Date', 'Race', 'Rider', 'Points']
+        recent_disp['Race Name'] = recent_disp['Race Name'].apply(lambda x: limit_text(x, 18))
+        
+        recent_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Points']
         
         st.dataframe(
             recent_disp, 
@@ -121,9 +123,10 @@ def show_dashboard():
             use_container_width=False,
             column_config={
                 "Date": st.column_config.TextColumn(width=70),
+                "Race": st.column_config.TextColumn(width=160),
+                "Stg": st.column_config.TextColumn(width=50),
+                "Rider": st.column_config.TextColumn(width=130),
                 "Points": st.column_config.NumberColumn(width=60),
-                "Race": st.column_config.TextColumn(width=180),
-                "Rider": st.column_config.TextColumn(width=140),
             }
         )
     else:
@@ -175,7 +178,11 @@ def show_schedule():
                        "T": st.column_config.TextColumn(width=40), "Type": st.column_config.TextColumn(width=150)})
 
 # --- 5. NAVIGATION ---
-pg = st.navigation([st.Page(show_dashboard, title="Dashboard"), st.Page(show_roster, title="Master Roster"), st.Page(show_schedule, title="Full Schedule")])
+pg = st.navigation([
+    st.Page(show_dashboard, title="Dashboard"), 
+    st.Page(show_roster, title="Master Roster"), 
+    st.Page(show_schedule, title="Full Schedule")
+])
 
 with st.sidebar:
     if st.button("Refresh Data"):
