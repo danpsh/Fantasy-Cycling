@@ -1,58 +1,58 @@
-race_name,tier
-Omloop Nieuwsblad ME,Tier 1
-Strade Bianche,Tier 1
-Paris-Nice,Tier 1
-Tirreno-Adriatico,Tier 1
-Milano-Sanremo,Tier 1
-Ronde van Vlaanderen - Tour des Flandres,Tier 1
-Paris-Roubaix,Tier 1
-Amstel Gold Race,Tier 1
-La Flèche Wallonne,Tier 1
-Liège-Bastogne-Liège,Tier 1
-Giro d'Italia,Tier 1
-Critérium du Dauphiné,Tier 1
-Tour de France,Tier 1
-La Vuelta Ciclista a España,Tier 1
-Grand Prix Cycliste de Québec,Tier 1
-Grand Prix Cycliste de Montréal,Tier 1
-World Championship - Time Trial,Tier 1
-World Championships - Road Race,Tier 1
-Il Lombardia,Tier 1
-Volta ao Algarve em Bicicleta,Tier 2
-Kuurne - Brussel - Kuurne,Tier 2
-Volta Ciclista a Catalunya,Tier 2
-E3 Saxo Classic,Tier 2
-Gent-Wevelgem in Flanders Fields,Tier 2
-Dwars door Vlaanderen - A travers la Flandre,Tier 2
-Itzulia Basque Country,Tier 2
-Tour de Romandie,Tier 2
-Tour de Suisse,Tier 2
-Donostia San Sebastian Klasikoa,Tier 2
-Tour de Pologne,Tier 2
-ADAC Cyclassics,Tier 2
-Renewi Tour,Tier 2
-Bretagne Classic - Ouest-France,Tier 2
-SUPER 8 Classic,Tier 2
-European Continental Championships- Road Race,Tier 2
-Giro dell'Emilia,Tier 2
-Tre Valli Varesine,Tier 2
-Santos Tour Down Under,Tier 3
-Cadel Evans Great Ocean Road Race,Tier 3
-Volta a la Comunitat Valenciana,Tier 3
-UAE Tour,Tier 3
-Faun-Ardèche Classic,Tier 3
-Faun Drome Classic,Tier 3
-Classic Brugge-De Panne ME,Tier 3
-Grand Premio Miguel Indurain,Tier 3
-De Brabantse Pijl - La Flèche Brabançonne,Tier 3
-Eschborn-Frankfurt,Tier 3
-Brussels Cycling Classic,Tier 3
-Copenhagen Sprint,Tier 3
-Lidl Deutschland Tour,Tier 3
-Tour of Britain Men,Tier 3
-GP Industria & Artigianato,Tier 3
-Gran Premio città di Peccioli - Coppa Sabatini,Tier 3
-Sparkassen Münsterland Giro,Tier 3
-Gran Piemonte,Tier 3
-Paris - Tours Elite,Tier 3
-Giro del Veneto,Tier 3
+race_name,date,tier,race_type
+Santos Tour Down Under,Jan 20 – Jan 25,Tier 3,Stage Race (Week-long)
+Cadel Evans Great Ocean Road Race,Feb 1,Tier 3,Classic (One-day)
+Volta a la Comunitat Valenciana,Feb 4 – Feb 8,Tier 3,Stage Race (Week-long)
+UAE Tour,Feb 16 – Feb 22,Tier 3,Stage Race (Week-long)
+Volta ao Algarve em Bicicleta,Feb 18 – Feb 22,Tier 3,Stage Race (Week-long)
+Faun-Ardèche Classic,Feb 28,Tier 3,Classic (One-day)
+Omloop Nieuwsblad ME,Feb 28,Tier 1,Classic (One-day)
+Faun Drome Classic,Mar 1,Tier 3,Classic (One-day)
+Kuurne - Brussel - Kuurne,Mar 1,Tier 2,Classic (One-day)
+Strade Bianche,Mar 7,Tier 1,Classic (One-day)
+Paris-Nice,Mar 8 – Mar 15,Tier 1,Stage Race (Week-long)
+Tirreno-Adriatico,Mar 9 – Mar 15,Tier 1,Stage Race (Week-long)
+Milano-Sanremo,Mar 21,Tier 1,Monument (One-day)
+Volta Ciclista a Catalunya,Mar 23 – Mar 29,Tier 2,Stage Race (Week-long)
+Classic Brugge-De Panne ME,Mar 25,Tier 3,Classic (One-day)
+E3 Saxo Classic,Mar 27,Tier 2,Classic (One-day)
+Gent-Wevelgem in Flanders Fields,Mar 29,Tier 2,Classic (One-day)
+Dwars door Vlaanderen - A travers la Flandre,Apr 1,Tier 2,Classic (One-day)
+Ronde van Vlaanderen - Tour des Flandres,Apr 5,Tier 1,Monument (One-day)
+Itzulia Basque Country,Apr 6 – Apr 11,Tier 2,Stage Race (Week-long)
+Grand Premio Miguel Indurain,Apr 11,Tier 3,Classic (One-day)
+Paris-Roubaix,Apr 12,Tier 1,Monument (One-day)
+De Brabantse Pijl - La Flèche Brabançonne,Apr 15,Tier 3,Classic (One-day)
+Amstel Gold Race,Apr 19,Tier 1,Classic (One-day)
+La Flèche Wallonne,Apr 22,Tier 1,Classic (One-day)
+Liège-Bastogne-Liege,Apr 26,Tier 1,Monument (One-day)
+Tour de Romandie,Apr 28 – May 3,Tier 2,Stage Race (Week-long)
+Eschborn-Frankfurt,May 1,Tier 3,Classic (One-day)
+Giro d'Italia,May 9 – May 31,Tier 1,Grand Tour (3 Weeks)
+Brussels Cycling Classic,Jun 7,Tier 3,Classic (One-day)
+Critérium du Dauphiné,Jun 7 – Jun 14,Tier 1,Stage Race (Week-long)
+Tour de Suisse,Jun 14 – Jun 21,Tier 2,Stage Race (Week-long)
+Tour de France,Jul 4 – Jul 26,Tier 1,Grand Tour (3 Weeks)
+Donostia San Sebastian Klasikoa,Aug 1,Tier 2,Classic (One-day)
+Tour de Pologne,Aug 3 – Aug 9,Tier 2,Stage Race (Week-long)
+ADAC Cyclassics,Aug 16,Tier 2,Classic (One-day)
+Lidl Deutschland Tour,Aug 19 – Aug 23,Tier 3,Stage Race (Week-long)
+La Vuelta Ciclista a España,Aug 22 – Sep 13,Tier 1,Grand Tour (3 Weeks)
+Renewi Tour,Aug 24 – Aug 30,Tier 2,Stage Race (Week-long)
+Bretagne Classic - Ouest-France,Aug 30,Tier 2,Classic (One-day)
+Tour of Britain Men,Sep 6 – Sep 13,Tier 3,Stage Race (Week-long)
+GP Industria & Artigianato,Sep 13,Tier 3,Classic (One-day)
+Grand Prix Cycliste de Québec,Sep 11,Tier 1,Classic (One-day)
+Grand Prix Cycliste de Montréal,Sep 13,Tier 1,Classic (One-day)
+Gran Premio città di Peccioli - Coppa Sabatini,Sep 17,Tier 3,Classic (One-day)
+SUPER 8 Classic,Sep 19,Tier 2,Classic (One-day)
+World Championship - Time Trial,Sep 20,Tier 1,Championship (One-day)
+European Continental Championships- Road Race,Sep 23,Tier 2,Championship (One-day)
+World Championships - Road Race,Sep 27,Tier 1,Championship (One-day)
+Sparkassen Münsterland Giro,Oct 3,Tier 3,Classic (One-day)
+Giro dell'Emilia,Oct 3,Tier 2,Classic (One-day)
+Tre Valli Varesine,Oct 6,Tier 2,Classic (One-day)
+Copenhagen Sprint,Oct 4,Tier 3,Classic (One-day)
+Gran Piemonte,Oct 8,Tier 3,Classic (One-day)
+Il Lombardia,Oct 10,Tier 1,Monument (One-day)
+Paris - Tours Elite,Oct 11,Tier 3,Classic (One-day)
+Giro del Veneto,Oct 14,Tier 3,Classic (One-day)
