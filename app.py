@@ -39,7 +39,6 @@ riders_df, schedule_df, results_raw = load_all_data()
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
-    # Process Results
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
     df_long = results_raw.melt(id_vars=['Date', 'Race Name'], value_vars=rank_cols, var_name='Pos_Label', value_name='rider_name')
     df_long['rank'] = df_long['Pos_Label'].str.extract(r'(\d+)').astype(int)
@@ -58,7 +57,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
 def show_dashboard():
     st.title("2026 Fantasy Standings")
     
-    # Leader Metrics
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -67,7 +65,6 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION 1: TOP SCORERS
     st.subheader("Top Scorers")
     t1, t2 = st.columns(2)
     owners = ["Tanner", "Daniel"]
@@ -84,46 +81,54 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION 2: RECENT RESULTS (Formatted Date)
+    # SECTION 2: RECENT RESULTS (With Autofit Logic)
     st.subheader("Recent Results")
     if not processed.empty:
         recent = processed.sort_values('Date', ascending=False).head(10).copy()
-        
-        # Format date to remove H:M:S
         recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
-        
         recent_disp = recent[['Date', 'Race Name', 'rider_name_y', 'pts']].copy()
         recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
         recent_disp.columns = ['Date', 'Race', 'Rider', 'Points']
-        st.dataframe(recent_disp, hide_index=True, use_container_width=True)
+        
+        # Using column_config to simulate autofit
+        st.dataframe(
+            recent_disp, 
+            hide_index=True, 
+            use_container_width=True,
+            column_config={
+                "Date": st.column_config.TextColumn(width="small"),
+                "Points": st.column_config.NumberColumn(width="small"),
+                "Race": st.column_config.TextColumn(width="medium"),
+                "Rider": st.column_config.TextColumn(width="medium"),
+            }
+        )
     else:
         st.write("Waiting for the first race results.")
 
     st.divider()
 
-    # SECTION 3: NEXT 5 RACES
+    # SECTION 3: NEXT 5 RACES (With Autofit Logic)
     st.subheader("Next 5 Upcoming Races")
     next_5 = schedule_df[['race_name', 'date', 'tier']].head(5).copy()
     next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
     next_5.columns = ['Race', 'Date', 'Tier']
-    st.dataframe(next_5, hide_index=True, use_container_width=True)
+    st.dataframe(
+        next_5, 
+        hide_index=True, 
+        use_container_width=True,
+        column_config={
+            "Date": st.column_config.TextColumn(width="medium"),
+            "Tier": st.column_config.TextColumn(width="small"),
+            "Race": st.column_config.TextColumn(width="large"),
+        }
+    )
 
 def show_roster():
     st.title("Master Roster")
-    st.write("Rosters shown in original draft order.")
-    
-    master_roster = riders_df.merge(
-        rider_points, 
-        left_on=['rider_name', 'owner'], 
-        right_on=['rider_name_y', 'owner'], 
-        how='left'
-    ).fillna(0)
-    
+    master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
     master_roster['short_name'] = master_roster['rider_name'].apply(shorten_name)
-    
     tan_roster = master_roster[master_roster['owner'] == 'Tanner']
     dan_roster = master_roster[master_roster['owner'] == 'Daniel']
-    
     max_len = max(len(tan_roster), len(dan_roster))
     roster_comp = pd.DataFrame({
         "Tanner": tan_roster['short_name'].tolist() + [""] * (max_len - len(tan_roster)),
@@ -131,7 +136,16 @@ def show_roster():
         "Daniel": dan_roster['short_name'].tolist() + [""] * (max_len - len(dan_roster)),
         "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
-    st.dataframe(roster_comp, hide_index=True, use_container_width=True, height=(max_len + 1) * 36)
+    st.dataframe(
+        roster_comp, 
+        hide_index=True, 
+        use_container_width=True, 
+        height=(max_len + 1) * 36,
+        column_config={
+            "Pts ": st.column_config.NumberColumn(width="small"),
+            "Pts": st.column_config.NumberColumn(width="small"),
+        }
+    )
 
 def show_schedule():
     st.title("Full 2026 Schedule")
