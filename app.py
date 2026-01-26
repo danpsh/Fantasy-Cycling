@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from datetime import datetime
+import re
 
 # --- 1. SETTINGS ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="expanded")
@@ -23,16 +24,28 @@ def shorten_name(name):
     parts = name.split()
     return f"{parts[0][0]}. {' '.join(parts[1:])}" if len(parts) > 1 else name
 
+def parse_schedule_date(date_str):
+    """
+    Converts formats like 'Jan 20 – Jan 25' or 'Feb 1' into a 2026 datetime object.
+    Takes the start date of a range.
+    """
+    try:
+        # Extract the first part of a range (e.g., 'Jan 20' from 'Jan 20 - Jan 25')
+        start_part = re.split('–|-', str(date_str))[0].strip()
+        # Append the year and parse
+        return pd.to_datetime(f"{start_part} 2026", format='%b %d %2026')
+    except:
+        return pd.NaT
+
 @st.cache_data(ttl=300)
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
         schedule = pd.read_csv('schedule.csv')
-        # Added openpyxl engine check
         results = pd.read_excel('results.xlsx', engine='openpyxl')
         return riders, schedule, results
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(f"File Error: {e}")
         return None, None, None
 
 # --- 3. DATA LOGIC ---
@@ -94,7 +107,6 @@ def show_dashboard():
     st.subheader("Recent Results")
     if not processed.empty:
         recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(15).copy()
-        # Ensure Date is datetime before formatting
         recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
         
         def format_stage(val):
@@ -125,21 +137,21 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION 3: NEXT 5 RACES (Linked to Results)
+    # --- UPCOMING RACES LOGIC ---
     st.subheader("Upcoming Races")
     
-    # 1. Convert schedule dates to datetime for comparison
-    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'], errors='coerce')
+    # 1. Create a sortable date column from your specific string format
+    schedule_df['sort_date'] = schedule_df['date'].apply(parse_schedule_date)
     
-    # 2. Find the last race date that has results
+    # 2. Find the reference date (the most recent race in results)
     if not results_raw.empty:
-        # Added errors='coerce' to prevent crash on bad date data
-        last_result_date = pd.to_datetime(results_raw['Date'], errors='coerce').max()
-        # Filter schedule for races strictly AFTER the last result date
-        future_races = schedule_df[schedule_df['date_dt'] > last_result_date].head(5).copy()
+        last_result_date = pd.to_datetime(results_raw['Date']).max()
+        # Get races where the start date is AFTER the latest result date
+        future_races = schedule_df[schedule_df['sort_date'] > last_result_date].sort_values('sort_date').head(5).copy()
     else:
-        # Fallback to today's date if results are empty
-        future_races = schedule_df[schedule_df['date_dt'] >= pd.Timestamp(datetime.now().date())].head(5).copy()
+        # Default to today if no results exist
+        today = pd.Timestamp(datetime.now().date())
+        future_races = schedule_df[schedule_df['sort_date'] >= today].sort_values('sort_date').head(5).copy()
 
     if not future_races.empty:
         next_5 = future_races[['race_name', 'date', 'tier']].copy()
@@ -157,7 +169,7 @@ def show_dashboard():
             }
         )
     else:
-        st.write("No more upcoming races found in the schedule.")
+        st.write("No more upcoming races found.")
 
 def show_roster():
     st.title("Master Roster")
@@ -197,7 +209,7 @@ def show_schedule():
     
     st.dataframe(full_sched, hide_index=True, use_container_width=True,
         column_config={
-            "Date": st.column_config.TextColumn(width=120),
+            "Date": st.column_config.TextColumn(width=150),
             "Race": st.column_config.TextColumn(width=300),
             "Tier": st.column_config.TextColumn(width=80), 
             "Type": st.column_config.TextColumn(width=150)
