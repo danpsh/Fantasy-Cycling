@@ -23,10 +23,6 @@ def shorten_name(name):
     parts = name.split()
     return f"{parts[0][0]}. {' '.join(parts[1:])}" if len(parts) > 1 else name
 
-def limit_text(text, limit=20):
-    if not isinstance(text, str): return ""
-    return text[:limit] + "..." if len(text) > limit else text
-
 @st.cache_data(ttl=300)
 def load_all_data():
     try:
@@ -86,8 +82,9 @@ def show_dashboard():
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
             if not top3.empty:
                 top3['rider_name_y'] = top3['rider_name_y'].apply(shorten_name)
-                top3.columns = ['Rider', 'Points'] # Renamed Pts to Points
-                st.table(top3)
+                top3.columns = ['Rider', 'Points']
+                # Changed from st.table to st.dataframe to allow hide_index=True
+                st.dataframe(top3, hide_index=True, use_container_width=True)
             else:
                 st.write("No points scored.")
 
@@ -100,12 +97,9 @@ def show_dashboard():
         recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
         
         def format_stage(val):
-            if pd.isna(val) or val == "":
-                return "—"
-            try:
-                return f"S{int(float(val))}"
-            except:
-                return str(val)
+            if pd.isna(val) or val == "": return "—"
+            try: return f"S{int(float(val))}"
+            except: return str(val)
 
         recent['Stg'] = recent['Stage'].apply(format_stage) if 'Stage' in recent.columns else "—"
         
@@ -132,14 +126,13 @@ def show_dashboard():
 
     # SECTION 3: NEXT 5 RACES
     st.subheader("Next 5 Upcoming Races")
-    # Filter for future races only
     future_races = schedule_df[pd.to_datetime(schedule_df['date']) >= datetime.now()].head(5).copy()
     if future_races.empty:
-        future_races = schedule_df.head(5).copy() # Fallback if data is old
+        future_races = schedule_df.head(5).copy()
         
     next_5 = future_races[['race_name', 'date', 'tier']].copy()
     next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
-    next_5.columns = ['Race', 'Date', 'Tier'] # Renamed T to Tier
+    next_5.columns = ['Race', 'Date', 'Tier']
     
     st.dataframe(
         next_5, 
