@@ -28,9 +28,11 @@ def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
         schedule = pd.read_csv('schedule.csv')
+        # Added openpyxl engine check
         results = pd.read_excel('results.xlsx', engine='openpyxl')
         return riders, schedule, results
-    except Exception:
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
         return None, None, None
 
 # --- 3. DATA LOGIC ---
@@ -92,6 +94,7 @@ def show_dashboard():
     st.subheader("Recent Results")
     if not processed.empty:
         recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(15).copy()
+        # Ensure Date is datetime before formatting
         recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
         
         def format_stage(val):
@@ -122,18 +125,16 @@ def show_dashboard():
 
     st.divider()
 
-    st.divider()
-
     # SECTION 3: NEXT 5 RACES (Linked to Results)
     st.subheader("Upcoming Races")
     
     # 1. Convert schedule dates to datetime for comparison
-    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'])
+    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'], errors='coerce')
     
     # 2. Find the last race date that has results
-    if not processed.empty:
-        # Get the latest date from the results file
-        last_result_date = pd.to_datetime(results_raw['Date']).max()
+    if not results_raw.empty:
+        # Added errors='coerce' to prevent crash on bad date data
+        last_result_date = pd.to_datetime(results_raw['Date'], errors='coerce').max()
         # Filter schedule for races strictly AFTER the last result date
         future_races = schedule_df[schedule_df['date_dt'] > last_result_date].head(5).copy()
     else:
@@ -173,19 +174,18 @@ def show_roster():
         "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
     
-    # Calculate height: ~35px per row + ~40px for header
     dynamic_height = (len(roster_comp) + 1) * 35 + 5
 
     st.dataframe(
         roster_comp, 
         hide_index=True, 
         use_container_width=True,
-        height=dynamic_height, # This removes the internal scrollbar
+        height=dynamic_height,
         column_config={
-            "Tanner": st.column_config.TextColumn(width=100), 
-            "Points ": st.column_config.NumberColumn(width=50),
-            "Daniel": st.column_config.TextColumn(width=100), 
-            "Points": st.column_config.NumberColumn(width=50)
+            "Tanner": st.column_config.TextColumn(width=150), 
+            "Points ": st.column_config.NumberColumn(width=80),
+            "Daniel": st.column_config.TextColumn(width=150), 
+            "Points": st.column_config.NumberColumn(width=80)
         }
     )
 
@@ -216,8 +216,3 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
-
-
-
-
-
