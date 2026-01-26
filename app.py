@@ -26,14 +26,15 @@ def shorten_name(name):
 
 def parse_schedule_date(date_str):
     """
-    Converts formats like 'Jan 20 – Jan 25' or 'Feb 1' into a 2026 datetime object.
-    Takes the start date of a range.
+    Handles formats: 'Jan 20 – Jan 25', 'Feb 1', 'Mar 8 - Mar 15'
     """
     try:
-        # Extract the first part of a range (e.g., 'Jan 20' from 'Jan 20 - Jan 25')
-        start_part = re.split('–|-', str(date_str))[0].strip()
-        # Append the year and parse
-        return pd.to_datetime(f"{start_part} 2026", format='%b %d %2026')
+        # Normalize various dash types to a standard pipe for splitting
+        clean_date = str(date_str).replace('–', '|').replace('-', '|')
+        start_part = clean_date.split('|')[0].strip()
+        
+        # Parse as 2026 date
+        return pd.to_datetime(f"{start_part} 2026", format='%b %d %Y', errors='coerce')
     except:
         return pd.NaT
 
@@ -45,7 +46,6 @@ def load_all_data():
         results = pd.read_excel('results.xlsx', engine='openpyxl')
         return riders, schedule, results
     except Exception as e:
-        st.error(f"File Error: {e}")
         return None, None, None
 
 # --- 3. DATA LOGIC ---
@@ -120,56 +120,34 @@ def show_dashboard():
         recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
         recent_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Points']
         
-        st.dataframe(
-            recent_disp, 
-            hide_index=True, 
-            use_container_width=True,
-            column_config={
-                "Date": st.column_config.TextColumn(width=100),
-                "Race": st.column_config.TextColumn(width=250),
-                "Stg": st.column_config.TextColumn(width=60),
-                "Rider": st.column_config.TextColumn(width=180),
-                "Points": st.column_config.NumberColumn(width=80),
-            }
-        )
+        st.dataframe(recent_disp, hide_index=True, use_container_width=True)
     else:
         st.write("No results yet.")
 
     st.divider()
 
-    # --- UPCOMING RACES LOGIC ---
+    # --- UPCOMING RACES FIXED ---
     st.subheader("Upcoming Races")
     
-    # 1. Create a sortable date column from your specific string format
+    # Create sortable dates
     schedule_df['sort_date'] = schedule_df['date'].apply(parse_schedule_date)
     
-    # 2. Find the reference date (the most recent race in results)
+    # Reference Date: Either last result date or today
     if not results_raw.empty:
-        last_result_date = pd.to_datetime(results_raw['Date']).max()
-        # Get races where the start date is AFTER the latest result date
-        future_races = schedule_df[schedule_df['sort_date'] > last_result_date].sort_values('sort_date').head(5).copy()
+        ref_date = pd.to_datetime(results_raw['Date']).max()
     else:
-        # Default to today if no results exist
-        today = pd.Timestamp(datetime.now().date())
-        future_races = schedule_df[schedule_df['sort_date'] >= today].sort_values('sort_date').head(5).copy()
+        ref_date = pd.Timestamp(datetime.now().date())
+
+    # Filter: strictly greater than the reference date
+    future_races = schedule_df[schedule_df['sort_date'] > ref_date].sort_values('sort_date').head(5).copy()
 
     if not future_races.empty:
         next_5 = future_races[['race_name', 'date', 'tier']].copy()
         next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
         next_5.columns = ['Race', 'Date', 'Tier']
-        
-        st.dataframe(
-            next_5, 
-            hide_index=True, 
-            use_container_width=True, 
-            column_config={
-                "Date": st.column_config.TextColumn(width=150),
-                "Tier": st.column_config.TextColumn(width=60),
-                "Race": st.column_config.TextColumn(width=400),
-            }
-        )
+        st.dataframe(next_5, hide_index=True, use_container_width=True)
     else:
-        st.write("No more upcoming races found.")
+        st.write("No upcoming races found. Check if your results file is updated through the end of the schedule.")
 
 def show_roster():
     st.title("Master Roster")
@@ -186,34 +164,14 @@ def show_roster():
         "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
     
-    dynamic_height = (len(roster_comp) + 1) * 35 + 5
-
-    st.dataframe(
-        roster_comp, 
-        hide_index=True, 
-        use_container_width=True,
-        height=dynamic_height,
-        column_config={
-            "Tanner": st.column_config.TextColumn(width=150), 
-            "Points ": st.column_config.NumberColumn(width=80),
-            "Daniel": st.column_config.TextColumn(width=150), 
-            "Points": st.column_config.NumberColumn(width=80)
-        }
-    )
+    st.dataframe(roster_comp, hide_index=True, use_container_width=True, height=(len(roster_comp)+1)*35+5)
 
 def show_schedule():
     st.title("Full 2026 Schedule")
     full_sched = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     full_sched['tier'] = full_sched['tier'].str.replace('Tier ', '', case=False)
     full_sched.columns = ['Date', 'Race', 'Tier', 'Type']
-    
-    st.dataframe(full_sched, hide_index=True, use_container_width=True,
-        column_config={
-            "Date": st.column_config.TextColumn(width=150),
-            "Race": st.column_config.TextColumn(width=300),
-            "Tier": st.column_config.TextColumn(width=80), 
-            "Type": st.column_config.TextColumn(width=150)
-        })
+    st.dataframe(full_sched, hide_index=True, use_container_width=True)
 
 # --- 5. NAVIGATION ---
 pg = st.navigation([
