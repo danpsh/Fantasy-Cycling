@@ -6,7 +6,6 @@ from datetime import datetime
 # --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="expanded")
 
-# Points Scoring Definition
 SCORING = {
     "Tier 1": {1: 30, 2: 27, 3: 24, 4: 21, 5: 18, 6: 15, 7: 12, 8: 9, 9: 6, 10: 3},
     "Tier 2": {1: 20, 2: 18, 3: 16, 4: 14, 5: 12, 6: 10, 7: 8, 8: 6, 9: 4, 10: 2},
@@ -37,7 +36,6 @@ def load_all_data():
 # --- 3. SHARED DATA LOGIC ---
 riders_df, schedule_df, results_raw = load_all_data()
 
-# Global variables for the app to use
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
@@ -47,7 +45,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     df_long['rank'] = df_long['Pos_Label'].str.extract(r'(\d+)').astype(int)
     df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
     
-    # Merge for point calculation
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name']], on='match_name', how='inner')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
@@ -70,32 +67,48 @@ def show_dashboard():
 
     st.divider()
 
-    # Next 5 Races
-    st.subheader("Next 5 Upcoming Races")
-    next_5 = schedule_df[['race_name', 'date', 'tier']].head(5).copy()
-    next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
-    next_5.columns = ['Race', 'Date', 'Tier']
-    st.dataframe(next_5, hide_index=True, use_container_width=True)
+    # SECTION 1: TOP SCORERS (Top 3 per team)
+    st.subheader("Top Scorers")
+    t1, t2 = st.columns(2)
+    # Use fixed order or dynamic winner order? Let's use fixed Tanner/Daniel columns for consistency
+    owners = ["Tanner", "Daniel"]
+    for i, name in enumerate(owners):
+        with (t1 if i == 0 else t2):
+            st.markdown(f"**{name} Top Performers**")
+            top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
+            if not top3.empty:
+                top3['rider_name_y'] = top3['rider_name_y'].apply(shorten_name)
+                top3.columns = ['Rider', 'Pts']
+                st.table(top3)
+            else:
+                st.write("No points scored yet.")
 
     st.divider()
 
-    # Recent Results
+    # SECTION 2: RECENT RESULTS
     st.subheader("Recent Results")
     if not processed.empty:
-        # Sort by most recent date
         recent = processed.sort_values('Date', ascending=False).head(10)
         recent_disp = recent[['Date', 'Race Name', 'rider_name_y', 'pts']].copy()
         recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
         recent_disp.columns = ['Date', 'Race', 'Rider', 'Points']
         st.dataframe(recent_disp, hide_index=True, use_container_width=True)
     else:
-        st.write("No race results recorded yet.")
+        st.write("Waiting for the first race results.")
+
+    st.divider()
+
+    # SECTION 3: NEXT 5 RACES
+    st.subheader("Next 5 Upcoming Races")
+    next_5 = schedule_df[['race_name', 'date', 'tier']].head(5).copy()
+    next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
+    next_5.columns = ['Race', 'Date', 'Tier']
+    st.dataframe(next_5, hide_index=True, use_container_width=True)
 
 def show_roster():
     st.title("Master Roster")
-    st.write("Rosters shown in draft order.")
+    st.write("Rosters shown in original draft order.")
     
-    # Merge points but keep the original riders_df order
     master_roster = riders_df.merge(
         rider_points, 
         left_on=['rider_name', 'owner'], 
@@ -105,7 +118,7 @@ def show_roster():
     
     master_roster['short_name'] = master_roster['rider_name'].apply(shorten_name)
     
-    # Separate by owner WITHOUT sorting by points (preserves CSV order)
+    # Preserve draft order from riders.csv
     tan_roster = master_roster[master_roster['owner'] == 'Tanner']
     dan_roster = master_roster[master_roster['owner'] == 'Daniel']
     
@@ -132,7 +145,6 @@ pg = st.navigation([
     st.Page(show_schedule, title="Full Schedule", url_path="schedule")
 ])
 
-# Sidebar Button for Refresh (Shared across all pages)
 with st.sidebar:
     if st.button("Refresh Data"):
         st.cache_data.clear()
