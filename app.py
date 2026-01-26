@@ -3,7 +3,7 @@ import pandas as pd
 import unicodedata
 from datetime import datetime
 
-# --- 1. SETTINGS ---
+# --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="expanded")
 
 SCORING = {
@@ -37,20 +37,26 @@ def load_all_data():
     except Exception:
         return None, None, None
 
-# --- 3. DATA LOGIC ---
+# --- 3. DATA LOGIC (Robust Date Handling) ---
 riders_df, schedule_df, results_raw = load_all_data()
 
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
-    # Date logic for filtering
-    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'])
+    # Robust Date Parsing for Schedule
+    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'], errors='coerce')
+    # Filter out rows that failed to parse or are in the past
     today = pd.Timestamp(datetime.now().date())
-    upcoming_df = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt')
+    valid_schedule = schedule_df.dropna(subset=['date_dt'])
+    upcoming_df = valid_schedule[valid_schedule['date_dt'] >= today].sort_values('date_dt')
+    
+    # Robust Date Parsing for Results
+    results_raw['Date_dt'] = pd.to_datetime(results_raw['Date'], errors='coerce')
+    results_raw = results_raw.dropna(subset=['Date_dt'])
     
     # Process Results
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
-    id_cols = ['Date', 'Race Name']
+    id_cols = ['Date_dt', 'Race Name']
     if 'Stage' in results_raw.columns:
         id_cols.append('Stage')
         
@@ -58,7 +64,8 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     df_long['rank'] = df_long['Pos_Label'].str.extract(r'(\d+)').astype(int)
     df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
     
-    df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
+    # Join with schedule for tiers
+    df_long = df_long.merge(valid_schedule[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name']], on='match_name', how='inner')
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     
@@ -71,6 +78,7 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
 def show_dashboard():
     st.title("2026 Fantasy Standings")
     
+    # Top Level Metrics (Dynamic sorting)
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -79,6 +87,7 @@ def show_dashboard():
 
     st.divider()
 
+    # SECTION: TOP SCORERS (Leader first)
     st.subheader("Top Scorers")
     t1, t2 = st.columns(2)
     for i, name in enumerate(display_order):
@@ -94,21 +103,20 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION: RECENT RESULTS (With New Stage Column)
+    # SECTION: RECENT RESULTS (With dedicated Stage column)
     st.subheader("Recent Results")
     if not processed.empty:
-        recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(12).copy()
-        recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
+        recent = processed.sort_values(['Date_dt', 'pts'], ascending=[False, False]).head(12).copy()
+        recent['Date_Disp'] = recent['Date_dt'].dt.strftime('%b %d')
         recent['rider_name_y'] = recent['rider_name_y'].apply(shorten_name)
         recent['Race Name'] = recent['Race Name'].apply(lambda x: limit_text(x, 18))
         
-        # Format Stage column for display
         if 'Stage' in recent.columns:
-            recent['Stg'] = recent['Stage'].apply(lambda x: f"S{int(x)}" if pd.notnull(x) and str(x).isdigit() else "-")
+            recent['Stg'] = recent['Stage'].apply(lambda x: f"S{int(x)}" if pd.notnull(x) and str(x).replace('.0','').isdigit() else "-")
         else:
             recent['Stg'] = "-"
 
-        recent_disp = recent[['Date', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
+        recent_disp = recent[['Date_Disp', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
         recent_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Points']
         
         st.dataframe(
@@ -128,13 +136,15 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION: NEXT 5 UPCOMING RACES (Date Filtered)
+    # SECTION: NEXT 5 UPCOMING RACES (Automatically filters out Santos TDU)
     st.subheader("Next 5 Upcoming Races")
     if not upcoming_df.empty:
         next_5 = upcoming_df.head(5).copy()
         next_5['T'] = next_5['tier'].str.replace('Tier ', '', case=False)
         next_5['Race'] = next_5['race_name'].apply(lambda x: limit_text(x, 25))
-        next_5_disp = next_5[['Race', 'date', 'T']]
+        # Keep original date string for display or use dt format
+        next_5['Date_Disp'] = next_5['date_dt'].dt.strftime('%b %d')
+        next_5_disp = next_5[['Race', 'Date_Disp', 'T']]
         next_5_disp.columns = ['Race', 'Date', 'T']
         
         st.dataframe(
@@ -156,9 +166,8 @@ def show_roster():
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
     master_roster['short_name'] = master_roster['rider_name'].apply(shorten_name)
     
-    # We sort by the index to ensure the CSV draft order is respected
-    tan_roster = master_roster[master_roster['owner'] == 'Tanner'].sort_index()
-    dan_roster = master_roster[master_roster['owner'] == 'Daniel'].sort_index()
+    tan_roster = master_roster[master_roster['owner'] == 'Tanner']
+    dan_roster = master_roster[master_roster['owner'] == 'Daniel']
     
     max_len = max(len(tan_roster), len(dan_roster))
     roster_comp = pd.DataFrame({
@@ -173,8 +182,11 @@ def show_roster():
 
 def show_schedule():
     st.title("Full 2026 Schedule")
-    full_sched = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
+    full_sched = schedule_df.copy()
     full_sched['tier'] = full_sched['tier'].str.replace('Tier ', '', case=False)
+    # Ensure date display is clean
+    full_sched['date'] = pd.to_datetime(full_sched['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+    full_sched = full_sched[['date', 'race_name', 'tier', 'race_type']]
     full_sched.columns = ['Date', 'Race', 'T', 'Type']
     st.dataframe(full_sched, hide_index=True, use_container_width=False,
         column_config={"Date": st.column_config.TextColumn(width=120), "Race": st.column_config.TextColumn(width=250),
