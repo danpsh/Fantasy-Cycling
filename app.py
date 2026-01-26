@@ -115,10 +115,10 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- UPCOMING SCHEDULE SECTION ---
-    st.subheader("🗓️ Upcoming Schedule")
+    # --- UPCOMING SCHEDULE SECTION (5 RACES) ---
+    st.subheader("🗓️ Next 5 Upcoming Races")
     today = pd.Timestamp(datetime.now().date())
-    upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(3)
+    upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(5)
     
     if not upcoming.empty:
         upcoming_display = upcoming[['date_assigned', 'race_name', 'tier']].copy()
@@ -173,8 +173,8 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
         "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
     
-    # CALCULATE HEIGHT: Header (approx 35px) + (number of rows * 35px) + padding
-    table_height = (max_len + 1) * 35 + 5
+    # Dynamic height to ensure no scroll: rows * 35.5px + header
+    table_height = (max_len + 1) * 36
 
     st.dataframe(
         final_df, 
