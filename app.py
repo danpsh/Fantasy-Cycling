@@ -122,35 +122,41 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION 3: NEXT 5 RACES
-    st.subheader("Next 5 Upcoming Races")
+    st.divider()
+
+    # SECTION 3: NEXT 5 RACES (Linked to Results)
+    st.subheader("Upcoming Races")
     
-    # Convert schedule dates to datetime objects for accurate filtering
+    # 1. Convert schedule dates to datetime for comparison
     schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'])
     
-    # Filter for races happening today or in the future
-    # .date() ensures we compare only the calendar day
-    today = datetime.now().date()
-    future_races = schedule_df[schedule_df['date_dt'].dt.date >= today].head(5).copy()
-    
-    if future_races.empty:
-        # Fallback to last 5 if no future races remain
-        future_races = schedule_df.tail(5).copy()
+    # 2. Find the last race date that has results
+    if not processed.empty:
+        # Get the latest date from the results file
+        last_result_date = pd.to_datetime(results_raw['Date']).max()
+        # Filter schedule for races strictly AFTER the last result date
+        future_races = schedule_df[schedule_df['date_dt'] > last_result_date].head(5).copy()
+    else:
+        # Fallback to today's date if results are empty
+        future_races = schedule_df[schedule_df['date_dt'] >= pd.Timestamp(datetime.now().date())].head(5).copy()
+
+    if not future_races.empty:
+        next_5 = future_races[['race_name', 'date', 'tier']].copy()
+        next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
+        next_5.columns = ['Race', 'Date', 'Tier']
         
-    next_5 = future_races[['race_name', 'date', 'tier']].copy()
-    next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
-    next_5.columns = ['Race', 'Date', 'Tier']
-    
-    st.dataframe(
-        next_5, 
-        hide_index=True, 
-        use_container_width=True, 
-        column_config={
-            "Date": st.column_config.TextColumn(width=150),
-            "Tier": st.column_config.TextColumn(width=60),
-            "Race": st.column_config.TextColumn(width=400),
-        }
-    )
+        st.dataframe(
+            next_5, 
+            hide_index=True, 
+            use_container_width=True, 
+            column_config={
+                "Date": st.column_config.TextColumn(width=150),
+                "Tier": st.column_config.TextColumn(width=60),
+                "Race": st.column_config.TextColumn(width=400),
+            }
+        )
+    else:
+        st.write("No more upcoming races found in the schedule.")
 
 def show_roster():
     st.title("Master Roster")
@@ -210,6 +216,7 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
+
 
 
 
