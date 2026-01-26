@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from datetime import datetime
+import difflib  # Built-in library for fuzzy matching
 
 # --- 1. SETTINGS & SCORING ---
 st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="collapsed")
 
-# CSS to hide sidebar and header
 st.markdown("""
     <style>
         [data-testid="stSidebar"] {display: none;}
@@ -20,10 +20,56 @@ SCORING = {
     "Tier 3": {1: 10, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1}
 }
 
+# --- 2. 2026 UCI WORLD TOUR CALENDAR REFERENCE ---
+UCI_2026_CALENDAR = {
+    "Tour Down Under": "2026-01-20",
+    "Cadel Evans Great Ocean Road Race": "2026-02-01",
+    "UAE Tour": "2026-02-16",
+    "Omloop Het Nieuwsblad": "2026-02-28",
+    "Strade Bianche": "2026-03-07",
+    "Paris-Nice": "2026-03-08",
+    "Tirreno-Adriatico": "2026-03-09",
+    "Milano-Sanremo": "2026-03-21",
+    "Volta a Catalunya": "2026-03-23",
+    "E3 Saxo Classic": "2026-03-27",
+    "Gent-Wevelgem": "2026-03-29",
+    "Dwars door Vlaanderen": "2026-04-01",
+    "Tour of Flanders": "2026-04-05",
+    "Tour of the Basque Country": "2026-04-06",
+    "Paris-Roubaix": "2026-04-12",
+    "Amstel Gold Race": "2026-04-19",
+    "La Fleche Wallonne": "2026-04-22",
+    "Liege-Bastogne-Liege": "2026-04-26",
+    "Tour de Romandie": "2026-04-28",
+    "Eschborn-Frankfurt": "2026-05-01",
+    "Giro d'Italia": "2026-05-09",
+    "Criterium du Dauphine": "2026-06-07",
+    "Tour de Suisse": "2026-06-14",
+    "Tour de France": "2026-07-04",
+    "Donostia San Sebastian Klasikoa": "2026-08-01",
+    "Tour of Poland": "2026-08-03",
+    "BEMER Cyclassics": "2026-08-16",
+    "Vuelta a Espana": "2026-08-22",
+    "Bretagne Classic": "2026-08-30",
+    "GP de Quebec": "2026-09-11",
+    "GP de Montreal": "2026-09-13",
+    "World Championships Road Race": "2026-09-27",
+    "Il Lombardia": "2026-10-10",
+    "Tour of Guangxi": "2026-10-13"
+}
+
 def normalize_name(name):
     if not isinstance(name, str): return ""
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return name.lower().replace('-', ' ').strip()
+
+def get_closest_date(race_name):
+    """Finds the date for a race even if spelling isn't perfect."""
+    official_names = list(UCI_2026_CALENDAR.keys())
+    match = difflib.get_close_matches(race_name, official_names, n=1, cutoff=0.6)
+    if match:
+        return UCI_2026_CALENDAR[match[0]]
+    return None
 
 @st.cache_data(ttl=300)
 def load_all_data():
@@ -35,10 +81,14 @@ def load_all_data():
     except Exception:
         return None, None, None
 
-# --- 2. DATA PROCESSING ---
+# --- 3. DATA PROCESSING ---
 riders_df, schedule_df, results_raw = load_all_data()
 
 if results_raw is not None and riders_df is not None and schedule_df is not None:
+    # AUTO-ASSIGN DATES to your schedule.csv
+    schedule_df['date_assigned'] = schedule_df['race_name'].apply(get_closest_date)
+    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date_assigned'])
+    
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
     # Process Results
@@ -56,8 +106,8 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     rider_points = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
 
-    # --- 3. MAIN DASHBOARD ---
-    st.title("2026 Fantasy Standings")
+    # --- 4. MAIN DASHBOARD ---
+    st.title("🏆 2026 Fantasy Standings")
     
     # Total Score Metrics
     m1, m2 = st.columns(2)
@@ -68,38 +118,40 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
+    # UPCOMING RACES SECTION
+    st.subheader("🗓️ Next 3 Upcoming Races")
+    today = pd.Timestamp(datetime.now().date())
+    
+    # Filter for future races that actually have an assigned date
+    upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(3)
+    
+    if not upcoming.empty:
+        upcoming_display = upcoming[['date_assigned', 'race_name', 'tier']].copy()
+        upcoming_display.columns = ['Date', 'Race Name', 'Tier']
+        st.table(upcoming_display)
+    else:
+        st.info("No upcoming races found in your schedule list for the rest of 2026.")
+
+    st.divider()
+
     # TOP 3 SCORERS SECTION
-    st.subheader("Top 3 Scorers")
+    st.subheader("⭐ Top 3 Scorers")
     t1, t2 = st.columns(2)
     for i, name in enumerate(["Tanner", "Daniel"]):
         with (t1 if i == 0 else t2):
             st.markdown(f"**Team {name}**")
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
-            top3.columns = ['Rider', 'Points']
-            top3.index = range(1, len(top3) + 1)
-            st.table(top3)
-
-    st.divider()
-
-    # UPCOMING RACES SECTION
-    st.subheader("🗓️ Next 3 Upcoming Races")
-    # Convert 'date' column to datetime (adjust column name if it's 'Date' in your CSV)
-    schedule_df['date_dt'] = pd.to_datetime(schedule_df['date'])
-    today = pd.Timestamp(datetime.now().date())
-    
-    upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(3)
-    
-    if not upcoming.empty:
-        upcoming_display = upcoming[['date', 'race_name', 'tier']].copy()
-        upcoming_display.columns = ['Date', 'Race Name', 'Tier']
-        st.dataframe(upcoming_display, hide_index=True, use_container_width=True)
-    else:
-        st.info("No upcoming races found in the schedule.")
+            if not top3.empty:
+                top3.columns = ['Rider', 'Points']
+                top3.index = range(1, len(top3) + 1)
+                st.table(top3)
+            else:
+                st.write("No points scored yet.")
 
     st.divider()
 
     # RECENT RESULTS SECTION
-    st.subheader("Recent Results")
+    st.subheader("🏁 Recent Results")
     if not processed.empty:
         history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
         history_df['Date'] = pd.to_datetime(history_df['Date']).dt.strftime('%m-%d')
@@ -110,42 +162,27 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- 4. MASTER ROSTER ---
-    st.subheader("Master Roster")
+    # --- 5. MASTER ROSTER ---
+    st.subheader("📋 Master Roster")
     
-    # Process Tanner's Roster
-    tan_roster = riders_df[riders_df['owner'] == 'Tanner'].copy()
-    tan_roster = tan_roster.merge(rider_points[rider_points['owner'] == 'Tanner'], 
-                                 left_on='rider_name', right_on='rider_name_y', 
-                                 how='left').fillna(0)
+    # Process for side-by-side display
+    master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
     
-    # Process Daniel's Roster
-    dan_roster = riders_df[riders_df['owner'] == 'Daniel'].copy()
-    dan_roster = dan_roster.merge(rider_points[rider_points['owner'] == 'Daniel'], 
-                                 left_on='rider_name', right_on='rider_name_y', 
-                                 how='left').fillna(0)
+    tan_roster = master_roster[master_roster['owner'] == 'Tanner'].sort_values('pts', ascending=False)
+    dan_roster = master_roster[master_roster['owner'] == 'Daniel'].sort_values('pts', ascending=False)
 
-    # Align lengths for side-by-side display
     max_len = max(len(dan_roster), len(tan_roster))
     
-    # Prepare display columns (ensuring we handle potential empty rosters)
-    tan_names = tan_roster['rider_name'].tolist() + [""] * (max_len - len(tan_roster))
-    tan_pts = tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster))
-    dan_names = dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster))
-    dan_pts = dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
-
-    master_table = pd.DataFrame({
-        "#": range(1, max_len + 1),
-        "Team Tanner": tan_names,
-        "Points ": tan_pts, 
-        "Team Daniel": dan_names,
-        "Points": dan_pts
+    final_df = pd.DataFrame({
+        "Tanner's Rider": tan_roster['rider_name'].tolist() + [""] * (max_len - len(tan_roster)),
+        "Pts ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
+        "Daniel's Rider": dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster)),
+        "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
-
-    st.dataframe(master_table, hide_index=True, use_container_width=True, height=(max_len + 1) * 36)
+    st.dataframe(final_df, use_container_width=True, hide_index=True)
 
     if st.button("Refresh Results"):
         st.cache_data.clear()
         st.rerun()
 else:
-    st.error("Missing data files. Please ensure riders.csv, schedule.csv, and results.xlsx are in the directory.")
+    st.error("Missing data files. Check that riders.csv, schedule.csv, and results.xlsx exist.")
