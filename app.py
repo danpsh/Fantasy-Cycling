@@ -67,10 +67,9 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION 1: TOP SCORERS (Top 3 per team)
+    # SECTION 1: TOP SCORERS
     st.subheader("Top Scorers")
     t1, t2 = st.columns(2)
-    # Use fixed order or dynamic winner order? Let's use fixed Tanner/Daniel columns for consistency
     owners = ["Tanner", "Daniel"]
     for i, name in enumerate(owners):
         with (t1 if i == 0 else t2):
@@ -85,10 +84,14 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION 2: RECENT RESULTS
+    # SECTION 2: RECENT RESULTS (Formatted Date)
     st.subheader("Recent Results")
     if not processed.empty:
-        recent = processed.sort_values('Date', ascending=False).head(10)
+        recent = processed.sort_values('Date', ascending=False).head(10).copy()
+        
+        # Format date to remove H:M:S
+        recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
+        
         recent_disp = recent[['Date', 'Race Name', 'rider_name_y', 'pts']].copy()
         recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
         recent_disp.columns = ['Date', 'Race', 'Rider', 'Points']
@@ -118,7 +121,6 @@ def show_roster():
     
     master_roster['short_name'] = master_roster['rider_name'].apply(shorten_name)
     
-    # Preserve draft order from riders.csv
     tan_roster = master_roster[master_roster['owner'] == 'Tanner']
     dan_roster = master_roster[master_roster['owner'] == 'Daniel']
     
