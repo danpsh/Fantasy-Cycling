@@ -86,25 +86,23 @@ def show_dashboard():
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
             if not top3.empty:
                 top3['rider_name_y'] = top3['rider_name_y'].apply(shorten_name)
-                top3.columns = ['Rider', 'Pts']
+                top3.columns = ['Rider', 'Points'] # Renamed Pts to Points
                 st.table(top3)
             else:
                 st.write("No points scored.")
 
     st.divider()
 
-    # SECTION 2: RECENT RESULTS (With Stage as a separate column)
+    # SECTION 2: RECENT RESULTS
     st.subheader("Recent Results")
     if not processed.empty:
         recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(15).copy()
         recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
         
-        # Format Stage column
         def format_stage(val):
             if pd.isna(val) or val == "":
                 return "—"
             try:
-                # Converts float 1.0 to int 1, then to string S1
                 return f"S{int(float(val))}"
             except:
                 return str(val)
@@ -113,20 +111,18 @@ def show_dashboard():
         
         recent_disp = recent[['Date', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
         recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
-        recent_disp['Race Name'] = recent_disp['Race Name'].apply(lambda x: limit_text(x, 18))
-        
         recent_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Points']
         
         st.dataframe(
             recent_disp, 
             hide_index=True, 
-            use_container_width=False,
+            use_container_width=True,
             column_config={
-                "Date": st.column_config.TextColumn(width=70),
-                "Race": st.column_config.TextColumn(width=160),
-                "Stg": st.column_config.TextColumn(width=50),
-                "Rider": st.column_config.TextColumn(width=130),
-                "Points": st.column_config.NumberColumn(width=60),
+                "Date": st.column_config.TextColumn(width="small"),
+                "Race": st.column_config.TextColumn(width="medium"),
+                "Stg": st.column_config.TextColumn(width="small"),
+                "Rider": st.column_config.TextColumn(width="medium"),
+                "Points": st.column_config.NumberColumn(width="small"),
             }
         )
     else:
@@ -136,18 +132,23 @@ def show_dashboard():
 
     # SECTION 3: NEXT 5 RACES
     st.subheader("Next 5 Upcoming Races")
-    next_5 = schedule_df[['race_name', 'date', 'tier']].head(5).copy()
+    # Filter for future races only
+    future_races = schedule_df[pd.to_datetime(schedule_df['date']) >= datetime.now()].head(5).copy()
+    if future_races.empty:
+        future_races = schedule_df.head(5).copy() # Fallback if data is old
+        
+    next_5 = future_races[['race_name', 'date', 'tier']].copy()
     next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
-    next_5['race_name'] = next_5['race_name'].apply(lambda x: limit_text(x, 25))
-    next_5.columns = ['Race', 'Date', 'T']
+    next_5.columns = ['Race', 'Date', 'Tier'] # Renamed T to Tier
+    
     st.dataframe(
         next_5, 
         hide_index=True, 
-        use_container_width=False, 
+        use_container_width=True, 
         column_config={
-            "Date": st.column_config.TextColumn(width=120),
-            "T": st.column_config.TextColumn(width=40),
-            "Race": st.column_config.TextColumn(width=220),
+            "Date": st.column_config.TextColumn(width="small"),
+            "Tier": st.column_config.TextColumn(width="small"),
+            "Race": st.column_config.TextColumn(width="large"),
         }
     )
 
@@ -160,22 +161,30 @@ def show_roster():
     max_len = max(len(tan_roster), len(dan_roster))
     roster_comp = pd.DataFrame({
         "Tanner": tan_roster['short_name'].tolist() + [""] * (max_len - len(tan_roster)),
-        "Pts ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
+        "Points ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
         "Daniel": dan_roster['short_name'].tolist() + [""] * (max_len - len(dan_roster)),
-        "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
+        "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
-    st.dataframe(roster_comp, hide_index=True, use_container_width=False,
-        column_config={"Tanner": st.column_config.TextColumn(width=150), "Pts ": st.column_config.NumberColumn(width=50),
-                       "Daniel": st.column_config.TextColumn(width=150), "Pts": st.column_config.NumberColumn(width=50)})
+    st.dataframe(roster_comp, hide_index=True, use_container_width=True,
+        column_config={
+            "Tanner": st.column_config.TextColumn(width="medium"), 
+            "Points ": st.column_config.NumberColumn(width="small"),
+            "Daniel": st.column_config.TextColumn(width="medium"), 
+            "Points": st.column_config.NumberColumn(width="small")
+        })
 
 def show_schedule():
     st.title("Full 2026 Schedule")
     full_sched = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     full_sched['tier'] = full_sched['tier'].str.replace('Tier ', '', case=False)
-    full_sched.columns = ['Date', 'Race', 'T', 'Type']
-    st.dataframe(full_sched, hide_index=True, use_container_width=False,
-        column_config={"Date": st.column_config.TextColumn(width=120), "Race": st.column_config.TextColumn(width=250),
-                       "T": st.column_config.TextColumn(width=40), "Type": st.column_config.TextColumn(width=150)})
+    full_sched.columns = ['Date', 'Race', 'Tier', 'Type']
+    st.dataframe(full_sched, hide_index=True, use_container_width=True,
+        column_config={
+            "Date": st.column_config.TextColumn(width="small"), 
+            "Race": st.column_config.TextColumn(width="large"),
+            "Tier": st.column_config.TextColumn(width="small"), 
+            "Type": st.column_config.TextColumn(width="medium")
+        })
 
 # --- 5. NAVIGATION ---
 pg = st.navigation([
