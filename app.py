@@ -83,14 +83,12 @@ def show_dashboard():
             if not top3.empty:
                 top3['rider_name_y'] = top3['rider_name_y'].apply(shorten_name)
                 top3.columns = ['Rider', 'Points']
-                # Changed from st.table to st.dataframe to allow hide_index=True
                 st.dataframe(top3, hide_index=True, use_container_width=True)
             else:
                 st.write("No points scored.")
 
     st.divider()
 
-    # SECTION 2: RECENT RESULTS
     st.subheader("Recent Results")
     if not processed.empty:
         recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(15).copy()
@@ -124,7 +122,6 @@ def show_dashboard():
 
     st.divider()
 
-    # SECTION 3: NEXT 5 RACES
     st.subheader("Next 5 Upcoming Races")
     future_races = schedule_df[pd.to_datetime(schedule_df['date']) >= datetime.now()].head(5).copy()
     if future_races.empty:
@@ -139,7 +136,7 @@ def show_dashboard():
         hide_index=True, 
         use_container_width=True, 
         column_config={
-            "Date": st.column_config.TextColumn(width="small"),
+            "Date": st.column_config.TextColumn(width="medium"), # Expanded date
             "Tier": st.column_config.TextColumn(width="small"),
             "Race": st.column_config.TextColumn(width="large"),
         }
@@ -152,17 +149,20 @@ def show_roster():
     tan_roster = master_roster[master_roster['owner'] == 'Tanner']
     dan_roster = master_roster[master_roster['owner'] == 'Daniel']
     max_len = max(len(tan_roster), len(dan_roster))
+    
     roster_comp = pd.DataFrame({
         "Tanner": tan_roster['short_name'].tolist() + [""] * (max_len - len(tan_roster)),
         "Points ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
         "Daniel": dan_roster['short_name'].tolist() + [""] * (max_len - len(dan_roster)),
         "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
+    
+    # use_container_width=True expanded the table to the full screen width
     st.dataframe(roster_comp, hide_index=True, use_container_width=True,
         column_config={
-            "Tanner": st.column_config.TextColumn(width="medium"), 
+            "Tanner": st.column_config.TextColumn(width="large"), 
             "Points ": st.column_config.NumberColumn(width="small"),
-            "Daniel": st.column_config.TextColumn(width="medium"), 
+            "Daniel": st.column_config.TextColumn(width="large"), 
             "Points": st.column_config.NumberColumn(width="small")
         })
 
@@ -171,9 +171,10 @@ def show_schedule():
     full_sched = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     full_sched['tier'] = full_sched['tier'].str.replace('Tier ', '', case=False)
     full_sched.columns = ['Date', 'Race', 'Tier', 'Type']
+    
     st.dataframe(full_sched, hide_index=True, use_container_width=True,
         column_config={
-            "Date": st.column_config.TextColumn(width="small"), 
+            "Date": st.column_config.TextColumn(width="medium"), # Expanded to fit full text
             "Race": st.column_config.TextColumn(width="large"),
             "Tier": st.column_config.TextColumn(width="small"), 
             "Type": st.column_config.TextColumn(width="medium")
