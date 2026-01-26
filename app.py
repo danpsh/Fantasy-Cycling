@@ -160,9 +160,9 @@ def show_roster():
     # use_container_width=True expanded the table to the full screen width
     st.dataframe(roster_comp, hide_index=True, use_container_width=True,
         column_config={
-            "Tanner": st.column_config.TextColumn(width="large"), 
+            "Tanner": st.column_config.TextColumn(width="medium"), 
             "Points ": st.column_config.NumberColumn(width="small"),
-            "Daniel": st.column_config.TextColumn(width="large"), 
+            "Daniel": st.column_config.TextColumn(width="medium"), 
             "Points": st.column_config.NumberColumn(width="small")
         })
 
@@ -193,6 +193,7 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
+
 
 
 
