@@ -181,7 +181,7 @@ def show_schedule():
     
     st.dataframe(full_sched, hide_index=True, use_container_width=True,
         column_config={
-            "Date": st.column_config.TextColumn(width=180),
+            "Date": st.column_config.TextColumn(width=120),
             "Race": st.column_config.TextColumn(width=300),
             "Tier": st.column_config.TextColumn(width=80), 
             "Type": st.column_config.TextColumn(width=150)
@@ -200,5 +200,6 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
+
 
 
