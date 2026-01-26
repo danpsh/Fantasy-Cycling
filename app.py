@@ -101,21 +101,28 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
     
     # Aggregates
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
+    # Determine the leader for dynamic display
+    if not leaderboard.empty:
+        leader_row = leaderboard.sort_values('pts', ascending=False)
+        display_order = leader_row['owner'].tolist()
+    else:
+        display_order = ["Daniel", "Tanner"]
+
     rider_points = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
 
     # --- 4. MAIN DASHBOARD ---
     st.title("🏆 2026 Fantasy Standings")
     
-    # Total Score Metrics
+    # Dynamic Leader Metrics (Winner shows first)
     m1, m2 = st.columns(2)
-    for i, name in enumerate(["Tanner", "Daniel"]):
+    for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
         with (m1 if i == 0 else m2):
-            st.metric(label=f"Team {name} Total", value=f"{score} Pts")
+            st.metric(label=f"{name} Total", value=f"{score} Pts")
 
     st.divider()
 
-    # --- UPCOMING SCHEDULE SECTION (5 RACES) ---
+    # --- UPCOMING SCHEDULE ---
     st.subheader("🗓️ Next 5 Upcoming Races")
     today = pd.Timestamp(datetime.now().date())
     upcoming = schedule_df[schedule_df['date_dt'] >= today].sort_values('date_dt').head(5)
@@ -129,23 +136,23 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # TOP 3 SCORERS SECTION
+    # Top 3 Scorers (Winner shows first)
     st.subheader("⭐ Top 3 Scorers")
     t1, t2 = st.columns(2)
-    for i, name in enumerate(["Tanner", "Daniel"]):
+    for i, name in enumerate(display_order):
         with (t1 if i == 0 else t2):
-            st.markdown(f"**Team {name}**")
+            st.markdown(f"**{name}**")
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
             if not top3.empty:
                 top3.columns = ['Rider', 'Points']
                 top3.index = range(1, len(top3) + 1)
                 st.table(top3)
             else:
-                st.write("No points scored yet.")
+                st.write("No points yet.")
 
     st.divider()
 
-    # RECENT RESULTS SECTION
+    # RECENT RESULTS
     st.subheader("🏁 Recent Results")
     if not processed.empty:
         history_df = processed[['Date', 'Race Name', 'Stage', 'rider_name_y', 'owner', 'pts']].sort_values('Date', ascending=False)
@@ -157,23 +164,26 @@ if results_raw is not None and riders_df is not None and schedule_df is not None
 
     st.divider()
 
-    # --- 5. MASTER ROSTER (FULL HEIGHT, NO SCROLL) ---
+    # --- 5. MASTER ROSTER (Tanner fixed on Left for Draft Order) ---
     st.subheader("📋 Master Roster")
     
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
+    
+    # Tanner's Data
     tan_roster = master_roster[master_roster['owner'] == 'Tanner'].sort_values('pts', ascending=False)
+    # Daniel's Data
     dan_roster = master_roster[master_roster['owner'] == 'Daniel'].sort_values('pts', ascending=False)
 
     max_len = max(len(dan_roster), len(tan_roster))
     
+    # Hard-coded column order: Tanner (Left), Daniel (Right)
     final_df = pd.DataFrame({
         "Tanner's Rider": tan_roster['rider_name'].tolist() + [""] * (max_len - len(tan_roster)),
-        "Pts ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
+        "Points ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
         "Daniel's Rider": dan_roster['rider_name'].tolist() + [""] * (max_len - len(dan_roster)),
-        "Pts": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
+        "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
     
-    # Dynamic height to ensure no scroll: rows * 35.5px + header
     table_height = (max_len + 1) * 36
 
     st.dataframe(
