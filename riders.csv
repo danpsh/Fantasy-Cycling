@@ -1,51 +1,61 @@
-rider_name,owner
-Jonas Vingegaard,Tanner
-Mathieu van der Poel,Tanner
-Isaac del Toro,Tanner
-Oscar Onley,Tanner
-Florian Lipowitz,Tanner
-Tom Pidcock,Tanner
-Primoz Roglic,Tanner
-Wout van Aert,Tanner
-Matteo Jorgenson,Tanner
-Paul Seixas,Tanner
-Adam Yates,Tanner
-Jordi Meeus,Tanner
-Ben Healy,Tanner
-Kaden Groves,Tanner
-Biniam Girmay,Tanner
-Kevin Vauquelin,Tanner
-Filippo Ganna,Tanner
-Egan Bernal,Tanner
-Brandon McNulty,Tanner
-Enric Mas,Tanner
-Paul Magnier,Tanner
-Christian Scaroni,Tanner
-Matthew Riccitello,Tanner
-Quinn Simmons,Tanner
-Michael Matthews,Tanner
-Joao Almeida,Daniel
-Mads Pedersen,Daniel
-Remco Evenepoel,Daniel
-Juan Ayuso,Daniel
-Jasper Philipsen,Daniel
-Jonathan Milan,Daniel
-Felix Gall,Daniel
-Olav Kooij,Daniel
-Tim Merlier,Daniel
-Matthew Brennan,Daniel
-Arnaud De Lie,Daniel
-Giulio Ciccone,Daniel
-Richard Carapaz,Daniel
-Mattias Skjelmose,Daniel
-Jai Hindley,Daniel
-Jay Vine,Daniel
-Ben O'Connor,Daniel
-Romain Gregoire,Daniel
-Giulio Pellizzari,Daniel
-Derek Gee,Daniel
-Thymen Arensman,Daniel
-Lenny Martinez,Daniel
-Antonio Tiberi,Daniel
-Michael Storer,Daniel
-Pavel Bittner,Daniel
+rider_name,owner,add_date,drop_date
+Jonas Vingegaard,Tanner,1/9/2026,
+Mathieu Van der Poel,Tanner,1/9/2026,
+Isaac Del Toro,Tanner,1/9/2026,
+Oscar Onley,Tanner,1/9/2026,
+Florian Lipowitz,Tanner,1/9/2026,
+Tom Pidcock,Tanner,1/9/2026,
+Primoz Roglic,Tanner,1/9/2026,
+Wout Van Aert,Tanner,1/9/2026,
+Matteo Jorgenson,Tanner,1/9/2026,
+Paul Seixas,Tanner,1/9/2026,
+Adam Yates,Tanner,1/9/2026,
+Jordi Meeus,Tanner,1/9/2026,
+Ben Healy,Tanner,1/9/2026,
+Kaden Groves,Tanner,1/9/2026,
+Biniam Girmay,Tanner,1/9/2026,
+Kevin Vauquelin,Tanner,1/9/2026,
+Filippo Ganna,Tanner,1/9/2026,
+Egan Bernal,Tanner,1/9/2026,
+Brandon McNulty,Tanner,1/9/2026,
+Enric Mas,Tanner,1/9/2026,
+Paul Magnier,Tanner,1/9/2026,
+Christian Scaroni,Tanner,1/9/2026,
+Matthew Riccitello,Tanner,1/9/2026,
+Quinn Simmons,Tanner,1/9/2026,
+Michael Matthews,Tanner,1/9/2026,
+Christophe Laporte,Tanner,1/28/2026,
+Jan Christen,Tanner,1/28/2026,
+Tobias Halland Johannessen,Tanner,1/28/2026,
+Julian Alaphilippe,Tanner,1/28/2026,
+Samuel Watson,Tanner,1/28/2026,
+Joao Almeida,Daniel,1/9/2026,
+Mads Pedersen,Daniel,1/9/2026,
+Remco Evenepoel,Daniel,1/9/2026,
+Juan Ayuso,Daniel,1/9/2026,
+Jasper Philipsen,Daniel,1/9/2026,
+Jonathan Milan,Daniel,1/9/2026,
+Felix Gall,Daniel,1/9/2026,
+Olav Kooij,Daniel,1/9/2026,
+Tim Merlier,Daniel,1/9/2026,
+Matthew Brennan,Daniel,1/9/2026,
+Arnaud De Lie,Daniel,1/9/2026,
+Giulio Ciccone,Daniel,1/9/2026,
+Richard Carapaz,Daniel,1/9/2026,
+Mattias Skjelmose,Daniel,1/9/2026,
+Jai Hindley,Daniel,1/9/2026,
+Jay Vine,Daniel,1/9/2026,
+Ben O'Connor,Daniel,1/9/2026,
+Romain Gregoire,Daniel,1/9/2026,
+Giulio Pellizzari,Daniel,1/9/2026,
+Derek Gee,Daniel,1/9/2026,
+Thymen Arensman,Daniel,1/9/2026,
+Lenny Martinez,Daniel,1/9/2026,
+Antonio Tiberi,Daniel,1/9/2026,
+Michael Storer,Daniel,1/9/2026,
+Pavel Bittner,Daniel,1/9/2026,
+Tobias Lund Andresen,Daniel,1/28/2026,
+Dylan Groenewegen,Daniel,1/28/2026,
+Lorenzo Fortunato,Daniel,1/28/2026,
+Santiago Buitrago,Daniel,1/28/2026,
+Cian Uijtdebroeks,Daniel,1/28/2026,
