@@ -29,8 +29,10 @@ def shorten_name(name):
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
-        # Assign a draft order based on the row position in the CSV
-        riders['draft_order'] = riders.index + 1
+        
+        # This identifies the order within the CSV for each owner specifically
+        # If Tanner is row 1, 3, 5... they become his picks 1, 2, 3...
+        riders['team_pick'] = riders.groupby('owner').cumcount() + 1
         
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
         riders['drop_date'] = pd.to_datetime(riders['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
@@ -41,7 +43,7 @@ def load_all_data():
         
         return riders, schedule, results
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error loading data: {e}")
         return None, None, None
 
 # --- 3. DATA PROCESSING ---
@@ -66,7 +68,7 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
-    processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name', 'add_date', 'drop_date']], on='match_name', how='inner')
+    processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name', 'team_pick', 'add_date', 'drop_date']], on='match_name', how='inner')
     processed = processed[(processed['Date'] >= processed['add_date']) & (processed['Date'] <= processed['drop_date'])].copy()
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     
@@ -107,15 +109,14 @@ def show_dashboard():
 
 def show_roster():
     st.title("Master Roster")
-    st.caption("Riders listed in original draft order (Pick # based on CSV row position)")
+    st.caption("Sorted by individual team draft order (Pick 1-30)")
     
-    # Merge riders with points while keeping draft_order
     master = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
     master['short_name'] = master['rider_name'].apply(shorten_name)
     
-    # Split and ensure they stay in draft order
-    tan_roster = master[master['owner'] == 'Tanner'].sort_values('draft_order')
-    dan_roster = master[master['owner'] == 'Daniel'].sort_values('draft_order')
+    # Split teams and sort by their internal pick number
+    tan_roster = master[master['owner'] == 'Tanner'].sort_values('team_pick')
+    dan_roster = master[master['owner'] == 'Daniel'].sort_values('team_pick')
     
     max_len = max(len(tan_roster), len(dan_roster))
     
@@ -123,10 +124,10 @@ def show_roster():
         return df[col].tolist() + [default] * (max_len - len(df))
 
     roster_comp = pd.DataFrame({
-        "Pick ": pad_list(tan_roster, 'draft_order', ""),
+        "#": pad_list(tan_roster, 'team_pick', ""),
         "Tanner": pad_list(tan_roster, 'short_name'),
         "Pts ": pad_list(tan_roster, 'pts', 0),
-        "Pick": pad_list(dan_roster, 'draft_order', ""),
+        " ##": pad_list(dan_roster, 'team_pick', ""),
         "Daniel": pad_list(dan_roster, 'short_name'),
         "Pts": pad_list(dan_roster, 'pts', 0)
     })
@@ -151,7 +152,7 @@ def show_point_history():
         ytd_disp.columns = ['Date', 'Race', 'Stg', 'Tier', 'Rider', 'Owner', 'Pos', 'Points']
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
     else:
-        st.info("No scoring data yet.")
+        st.info("No scoring data available yet.")
 
 def show_schedule():
     st.title("Full 2026 Schedule")
