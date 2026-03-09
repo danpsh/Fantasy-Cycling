@@ -46,10 +46,17 @@ def load_all_data():
         
         return riders, schedule, results
     except Exception as e:
+        st.error(f"Error loading data: {e}")
         return None, None, None
 
-# --- 3. DATA LOGIC ---
+# --- 3. DATA PROCESSING ---
 riders_df, schedule_df, results_raw = load_all_data()
+
+# Global variables for processed data
+processed = pd.DataFrame()
+leaderboard = pd.DataFrame()
+rider_points = pd.DataFrame()
+display_order = ["Tanner", "Daniel"]
 
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
@@ -77,8 +84,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     if not leaderboard.empty:
         display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist()
-    else:
-        display_order = ["Tanner", "Daniel"]
         
     rider_points = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
 
@@ -108,7 +113,6 @@ def show_dashboard():
             else:
                 st.write("No points scored.")
 
-    # --- SEASON PROGRESS CHART ---
     st.divider()
     st.subheader("Season Progress")
     if not processed.empty:
@@ -117,15 +121,12 @@ def show_dashboard():
         timeline = timeline.reindex(full_range, fill_value=0)
         cumulative_pts = timeline.cumsum()
         st.line_chart(cumulative_pts, use_container_width=True)
-    else:
-        st.info("No point data available for progress chart.")
 
     st.divider()
-
     st.subheader("Recent Results")
     if not processed.empty:
         recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(15).copy()
-        recent['Date'] = pd.to_datetime(recent['Date']).dt.strftime('%b %d')
+        recent['Date_Disp'] = recent['Date'].dt.strftime('%b %d')
         
         def format_stage(val):
             if pd.isna(val) or val == "": return "—"
@@ -133,41 +134,17 @@ def show_dashboard():
             except: return str(val)
 
         recent['Stg'] = recent['Stage'].apply(format_stage) if 'Stage' in recent.columns else "—"
-        
-        # NOTE: Removed apply(shorten_name) here to show the full Rider Name
-        recent_disp = recent[['Date', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
+        recent_disp = recent[['Date_Disp', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
         recent_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Points']
-        
         st.dataframe(recent_disp, hide_index=True, use_container_width=True)
-    else:
-        st.write("No results yet.")
-
-    st.divider()
-
-    st.subheader("Upcoming Races")
-    schedule_df['sort_date'] = schedule_df['date'].apply(parse_schedule_date)
-    
-    if not results_raw.empty:
-        ref_date = pd.to_datetime(results_raw['Date']).max()
-    else:
-        ref_date = pd.Timestamp(datetime.now().date())
-
-    future_races = schedule_df[schedule_df['sort_date'] > ref_date].sort_values('sort_date').head(5).copy()
-
-    if not future_races.empty:
-        next_5 = future_races[['race_name', 'date', 'tier']].copy()
-        next_5['tier'] = next_5['tier'].str.replace('Tier ', '', case=False)
-        next_5.columns = ['Race', 'Date', 'Tier']
-        st.dataframe(next_5, hide_index=True, use_container_width=True)
-    else:
-        st.write("No upcoming races found.")
 
 def show_roster():
     st.title("Master Roster")
     master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
     master_roster['short_name'] = master_roster['rider_name'].apply(shorten_name)
-    tan_roster = master_roster[master_roster['owner'] == 'Tanner']
-    dan_roster = master_roster[master_roster['owner'] == 'Daniel']
+    
+    tan_roster = master_roster[master_roster['owner'] == 'Tanner'].sort_values('pts', ascending=False)
+    dan_roster = master_roster[master_roster['owner'] == 'Daniel'].sort_values('pts', ascending=False)
     max_len = max(len(tan_roster), len(dan_roster))
     
     roster_comp = pd.DataFrame({
@@ -176,8 +153,41 @@ def show_roster():
         "Daniel": dan_roster['short_name'].tolist() + [""] * (max_len - len(dan_roster)),
         "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
     })
+    st.dataframe(roster_comp, hide_index=True, use_container_width=True)
+
+def show_point_history():
+    st.title("YTD Point History")
+    st.write("A chronological list of all scoring instances this season.")
     
-    st.dataframe(roster_comp, hide_index=True, use_container_width=True, height=(len(roster_comp)+1)*35+5)
+    if not processed.empty:
+        # Create YTD Table
+        ytd = processed.sort_values(['Date', 'pts'], ascending=[False, False]).copy()
+        ytd['Date_Str'] = ytd['Date'].dt.strftime('%b %d')
+        
+        def format_stage(val):
+            if pd.isna(val) or val == "" or val == "—": return "—"
+            try: return f"S{int(float(val))}"
+            except: return str(val)
+        
+        ytd['Stg'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
+        
+        # Select and rename for cleaner UI
+        ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'rider_name_y', 'owner', 'rank', 'pts']].copy()
+        ytd_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Owner', 'Pos', 'Points']
+        
+        # Sidebar Filters inside this page
+        st.sidebar.header("Filter History")
+        owners = st.sidebar.multiselect("Select Owner", options=ytd_disp['Owner'].unique())
+        races = st.sidebar.multiselect("Select Race", options=sorted(ytd_disp['Race'].unique()))
+        
+        if owners:
+            ytd_disp = ytd_disp[ytd_disp['Owner'].isin(owners)]
+        if races:
+            ytd_disp = ytd_disp[ytd_disp['Race'].isin(races)]
+            
+        st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
+    else:
+        st.info("No data available to show.")
 
 def show_schedule():
     st.title("Full 2026 Schedule")
@@ -188,15 +198,15 @@ def show_schedule():
 
 # --- 5. NAVIGATION ---
 pg = st.navigation([
-    st.Page(show_dashboard, title="Dashboard"), 
-    st.Page(show_roster, title="Master Roster"), 
-    st.Page(show_schedule, title="Full Schedule")
+    st.Page(show_dashboard, title="Dashboard", icon="📊"), 
+    st.Page(show_roster, title="Master Roster", icon="👥"), 
+    st.Page(show_point_history, title="Point History", icon="📜"),
+    st.Page(show_schedule, title="Full Schedule", icon="📅")
 ])
 
 with st.sidebar:
-    if st.button("Refresh Data"):
+    if st.button("Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
 pg.run()
-
