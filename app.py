@@ -107,16 +107,13 @@ def show_dashboard():
             else:
                 st.write("No points scored.")
 
-    # --- ADDED: SEASON PROGRESS CHART ---
+    # --- SEASON PROGRESS CHART ---
     st.divider()
     st.subheader("Season Progress")
     if not processed.empty:
-        # Group by Date and Owner, then pivot so Owners are columns
         timeline = processed.groupby(['Date', 'owner'])['pts'].sum().unstack(fill_value=0)
-        # Ensure a continuous timeline for the chart
         full_range = pd.date_range(start=timeline.index.min(), end=timeline.index.max())
         timeline = timeline.reindex(full_range, fill_value=0)
-        # Calculate the cumulative sum over time
         cumulative_pts = timeline.cumsum()
         st.line_chart(cumulative_pts, use_container_width=True)
     else:
@@ -136,8 +133,8 @@ def show_dashboard():
 
         recent['Stg'] = recent['Stage'].apply(format_stage) if 'Stage' in recent.columns else "—"
         
+        # NOTE: Removed apply(shorten_name) here to show the full Rider Name
         recent_disp = recent[['Date', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
-        recent_disp['rider_name_y'] = recent_disp['rider_name_y'].apply(shorten_name)
         recent_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Points']
         
         st.dataframe(recent_disp, hide_index=True, use_container_width=True)
