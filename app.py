@@ -157,7 +157,6 @@ def show_roster():
 
 def show_point_history():
     st.title("YTD Point History")
-    st.write("A chronological list of all scoring instances this season.")
     
     if not processed.empty:
         # Create YTD Table
@@ -171,23 +170,16 @@ def show_point_history():
         
         ytd['Stg'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
         
-        # Select and rename for cleaner UI
-        ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'rider_name_y', 'owner', 'rank', 'pts']].copy()
-        ytd_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Owner', 'Pos', 'Points']
+        # Format Tier for cleaner look (removes "Tier " text if present)
+        ytd['Tier_Short'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
         
-        # Sidebar Filters inside this page
-        st.sidebar.header("Filter History")
-        owners = st.sidebar.multiselect("Select Owner", options=ytd_disp['Owner'].unique())
-        races = st.sidebar.multiselect("Select Race", options=sorted(ytd_disp['Race'].unique()))
+        # Select and rename columns
+        ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'Tier_Short', 'rider_name_y', 'owner', 'rank', 'pts']].copy()
+        ytd_disp.columns = ['Date', 'Race', 'Stg', 'Tier', 'Rider', 'Owner', 'Pos', 'Points']
         
-        if owners:
-            ytd_disp = ytd_disp[ytd_disp['Owner'].isin(owners)]
-        if races:
-            ytd_disp = ytd_disp[ytd_disp['Race'].isin(races)]
-            
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
     else:
-        st.info("No data available to show.")
+        st.info("No scoring data available yet.")
 
 def show_schedule():
     st.title("Full 2026 Schedule")
