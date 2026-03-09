@@ -36,14 +36,11 @@ def parse_schedule_date(date_str):
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
-        # Convert rider dates to datetime
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
-        # Handle open-ended drop dates by setting to end of 2026
         riders['drop_date'] = pd.to_datetime(riders['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
         
         schedule = pd.read_csv('schedule.csv')
         results = pd.read_excel('results.xlsx', engine='openpyxl')
-        # Ensure result dates are datetime
         results['Date'] = pd.to_datetime(results['Date'], errors='coerce')
         
         return riders, schedule, results
@@ -56,7 +53,6 @@ riders_df, schedule_df, results_raw = load_all_data()
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
-    # Process Results
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
     id_cols = ['Date', 'Race Name']
     if 'Stage' in results_raw.columns:
@@ -68,10 +64,8 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
-    # Logic Change: Merge with full rider metadata (including dates)
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name', 'add_date', 'drop_date']], on='match_name', how='inner')
     
-    # Logic Change: Filter points strictly between the add_date and drop_date
     processed = processed[
         (processed['Date'] >= processed['add_date']) & 
         (processed['Date'] <= processed['drop_date'])
@@ -112,6 +106,21 @@ def show_dashboard():
                 st.dataframe(top3, hide_index=True, use_container_width=True)
             else:
                 st.write("No points scored.")
+
+    # --- ADDED: SEASON PROGRESS CHART ---
+    st.divider()
+    st.subheader("Season Progress")
+    if not processed.empty:
+        # Group by Date and Owner, then pivot so Owners are columns
+        timeline = processed.groupby(['Date', 'owner'])['pts'].sum().unstack(fill_value=0)
+        # Ensure a continuous timeline for the chart
+        full_range = pd.date_range(start=timeline.index.min(), end=timeline.index.max())
+        timeline = timeline.reindex(full_range, fill_value=0)
+        # Calculate the cumulative sum over time
+        cumulative_pts = timeline.cumsum()
+        st.line_chart(cumulative_pts, use_container_width=True)
+    else:
+        st.info("No point data available for progress chart.")
 
     st.divider()
 
