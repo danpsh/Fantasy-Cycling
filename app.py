@@ -25,18 +25,13 @@ def shorten_name(name):
     parts = name.split()
     return f"{parts[0][0]}. {' '.join(parts[1:])}" if len(parts) > 1 else name
 
-def parse_schedule_date(date_str):
-    try:
-        clean_date = str(date_str).replace('–', '|').replace('-', '|')
-        start_part = clean_date.split('|')[0].strip()
-        return pd.to_datetime(f"{start_part} 2026", format='%b %d %Y', errors='coerce')
-    except:
-        return pd.NaT
-
 @st.cache_data(ttl=300)
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
+        # Assign a draft order based on the row position in the CSV
+        riders['draft_order'] = riders.index + 1
+        
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
         riders['drop_date'] = pd.to_datetime(riders['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
         
@@ -46,13 +41,12 @@ def load_all_data():
         
         return riders, schedule, results
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(f"Error: {e}")
         return None, None, None
 
 # --- 3. DATA PROCESSING ---
 riders_df, schedule_df, results_raw = load_all_data()
 
-# Global variables for processed data
 processed = pd.DataFrame()
 leaderboard = pd.DataFrame()
 rider_points = pd.DataFrame()
@@ -73,12 +67,7 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name', 'add_date', 'drop_date']], on='match_name', how='inner')
-    
-    processed = processed[
-        (processed['Date'] >= processed['add_date']) & 
-        (processed['Date'] <= processed['drop_date'])
-    ].copy()
-
+    processed = processed[(processed['Date'] >= processed['add_date']) & (processed['Date'] <= processed['drop_date'])].copy()
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
@@ -91,7 +80,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
 
 def show_dashboard():
     st.title("2026 Fantasy Standings")
-    
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -99,7 +87,6 @@ def show_dashboard():
             st.metric(label=f"{name} Total", value=f"{score} Pts")
 
     st.divider()
-
     st.subheader("Top Scorers")
     t1, t2 = st.columns(2)
     for i, name in enumerate(display_order):
@@ -110,76 +97,61 @@ def show_dashboard():
                 top3['rider_name_y'] = top3['rider_name_y'].apply(shorten_name)
                 top3.columns = ['Rider', 'Points']
                 st.dataframe(top3, hide_index=True, use_container_width=True)
-            else:
-                st.write("No points scored.")
 
     st.divider()
     st.subheader("Season Progress")
     if not processed.empty:
         timeline = processed.groupby(['Date', 'owner'])['pts'].sum().unstack(fill_value=0)
         full_range = pd.date_range(start=timeline.index.min(), end=timeline.index.max())
-        timeline = timeline.reindex(full_range, fill_value=0)
-        cumulative_pts = timeline.cumsum()
-        st.line_chart(cumulative_pts, use_container_width=True)
+        st.line_chart(timeline.reindex(full_range, fill_value=0).cumsum(), use_container_width=True)
 
-    st.divider()
-    st.subheader("Recent Results")
+def show_roster():
+    st.title("Master Roster")
+    st.caption("Riders listed in original draft order (Pick # based on CSV row position)")
+    
+    # Merge riders with points while keeping draft_order
+    master = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
+    master['short_name'] = master['rider_name'].apply(shorten_name)
+    
+    # Split and ensure they stay in draft order
+    tan_roster = master[master['owner'] == 'Tanner'].sort_values('draft_order')
+    dan_roster = master[master['owner'] == 'Daniel'].sort_values('draft_order')
+    
+    max_len = max(len(tan_roster), len(dan_roster))
+    
+    def pad_list(df, col, default=""):
+        return df[col].tolist() + [default] * (max_len - len(df))
+
+    roster_comp = pd.DataFrame({
+        "Pick ": pad_list(tan_roster, 'draft_order', ""),
+        "Tanner": pad_list(tan_roster, 'short_name'),
+        "Pts ": pad_list(tan_roster, 'pts', 0),
+        "Pick": pad_list(dan_roster, 'draft_order', ""),
+        "Daniel": pad_list(dan_roster, 'short_name'),
+        "Pts": pad_list(dan_roster, 'pts', 0)
+    })
+    
+    st.dataframe(roster_comp, hide_index=True, use_container_width=True)
+
+def show_point_history():
+    st.title("YTD Point History")
     if not processed.empty:
-        recent = processed.sort_values(['Date', 'pts'], ascending=[False, False]).head(15).copy()
-        recent['Date_Disp'] = recent['Date'].dt.strftime('%b %d')
+        ytd = processed.sort_values(['Date', 'pts'], ascending=[False, False]).copy()
+        ytd['Date_Str'] = ytd['Date'].dt.strftime('%b %d')
         
         def format_stage(val):
             if pd.isna(val) or val == "": return "—"
             try: return f"S{int(float(val))}"
             except: return str(val)
-
-        recent['Stg'] = recent['Stage'].apply(format_stage) if 'Stage' in recent.columns else "—"
-        recent_disp = recent[['Date_Disp', 'Race Name', 'Stg', 'rider_name_y', 'pts']].copy()
-        recent_disp.columns = ['Date', 'Race', 'Stg', 'Rider', 'Points']
-        st.dataframe(recent_disp, hide_index=True, use_container_width=True)
-
-def show_roster():
-    st.title("Master Roster")
-    master_roster = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
-    master_roster['short_name'] = master_roster['rider_name'].apply(shorten_name)
-    
-    tan_roster = master_roster[master_roster['owner'] == 'Tanner'].sort_values('pts', ascending=False)
-    dan_roster = master_roster[master_roster['owner'] == 'Daniel'].sort_values('pts', ascending=False)
-    max_len = max(len(tan_roster), len(dan_roster))
-    
-    roster_comp = pd.DataFrame({
-        "Tanner": tan_roster['short_name'].tolist() + [""] * (max_len - len(tan_roster)),
-        "Points ": tan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(tan_roster)),
-        "Daniel": dan_roster['short_name'].tolist() + [""] * (max_len - len(dan_roster)),
-        "Points": dan_roster['pts'].astype(int).tolist() + [0] * (max_len - len(dan_roster))
-    })
-    st.dataframe(roster_comp, hide_index=True, use_container_width=True)
-
-def show_point_history():
-    st.title("YTD Point History")
-    
-    if not processed.empty:
-        # Create YTD Table
-        ytd = processed.sort_values(['Date', 'pts'], ascending=[False, False]).copy()
-        ytd['Date_Str'] = ytd['Date'].dt.strftime('%b %d')
-        
-        def format_stage(val):
-            if pd.isna(val) or val == "" or val == "—": return "—"
-            try: return f"S{int(float(val))}"
-            except: return str(val)
         
         ytd['Stg'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
+        ytd['Tier_Val'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
         
-        # Format Tier for cleaner look (removes "Tier " text if present)
-        ytd['Tier_Short'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
-        
-        # Select and rename columns
-        ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'Tier_Short', 'rider_name_y', 'owner', 'rank', 'pts']].copy()
+        ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'Tier_Val', 'rider_name_y', 'owner', 'rank', 'pts']].copy()
         ytd_disp.columns = ['Date', 'Race', 'Stg', 'Tier', 'Rider', 'Owner', 'Pos', 'Points']
-        
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
     else:
-        st.info("No scoring data available yet.")
+        st.info("No scoring data yet.")
 
 def show_schedule():
     st.title("Full 2026 Schedule")
