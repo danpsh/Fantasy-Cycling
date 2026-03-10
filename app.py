@@ -6,7 +6,7 @@ import re
 
 # --- 1. SETTINGS ---
 st.set_page_config(
-    page_title="2026 Fantasy Cycling", 
+    page_title="2026 Fantasy Standings", 
     layout="wide", 
     initial_sidebar_state="auto"
 )
@@ -76,23 +76,19 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     if not leaderboard.empty:
         display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist()
         
-    rider_points = processed.groupby(['owner', 'rider_name'])['pts'].sum().reset_index()
+    rider_points = processed.groupby(['owner', 'rider_name', 'team_pick'])['pts'].sum().reset_index()
 
 # --- 4. PAGE FUNCTIONS ---
 
 def show_dashboard():
     st.title("2026 Fantasy Standings")
-    
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
         with (m1 if i == 0 else m2):
             st.metric(label=f"{name} Total", value=f"{score} Pts")
-
     st.divider()
-    
     col_left, col_right = st.columns([1, 2])
-    
     with col_left:
         st.subheader("Top Scorers")
         for name in display_order:
@@ -101,36 +97,74 @@ def show_dashboard():
             if not top3.empty:
                 top3.columns = ['Rider', 'Points']
                 st.dataframe(top3, hide_index=True, use_container_width=True)
-    
     with col_right:
         st.subheader("Season Progress")
         if not processed.empty:
             timeline = processed.groupby(['Date', 'owner'])['pts'].sum().unstack(fill_value=0)
             full_range = pd.date_range(start=timeline.index.min(), end=timeline.index.max())
             st.line_chart(timeline.reindex(full_range, fill_value=0).cumsum(), use_container_width=True)
-
     st.divider()
-
     st.subheader("Recent Activity")
     if not processed.empty:
-        recent = processed.sort_values(
-            by=['Date', 'Race Name', 'pts'], 
-            ascending=[False, True, False]
-        ).head(15).copy()
-        
+        recent = processed.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).head(15).copy()
         recent['Date_Str'] = recent['Date'].dt.strftime('%B %d')
         recent_display = recent[['Date_Str', 'Race Name', 'rider_name', 'owner', 'rank', 'pts']]
         recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Pos', 'Points']
-        
         st.dataframe(recent_display, hide_index=True, use_container_width=True)
+
+def show_analysis():
+    st.title("Draft Analysis")
+    st.markdown("Comparing point production based on draft slots.")
+
+    if rider_points.empty:
+        st.info("No data available for analysis yet.")
+        return
+
+    # Define the Groups
+    bins = [0, 5, 10, 15, 20, 25, 30]
+    labels = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30']
+    
+    # Create the Tier Data
+    analysis_df = rider_points.copy()
+    analysis_df['Draft Group'] = pd.cut(analysis_df['team_pick'], bins=bins, labels=labels)
+    
+    tier_summary = analysis_df.groupby(['Draft Group', 'owner'], observed=False)['pts'].sum().unstack().fillna(0)
+
+    # 1. Tier Table
+    st.subheader("Points by Draft Group")
+    st.dataframe(tier_summary, use_container_width=True)
+
+    # 2. Tier Bar Chart
+    st.bar_chart(tier_summary, use_container_width=True)
+
+    st.divider()
+
+    # 3. Macro Groups (Top 10, Mid 10, Bottom 10)
+    st.subheader("Macro Group Performance")
+    
+    def get_macro_points(owner, start, end):
+        return analysis_df[(analysis_df['owner'] == owner) & 
+                           (analysis_df['team_pick'] >= start) & 
+                           (analysis_df['team_pick'] <= end)]['pts'].sum()
+
+    macro_data = []
+    for owner in display_order:
+        macro_data.append({
+            "Owner": owner,
+            "Top 10 (1-10)": get_macro_points(owner, 1, 10),
+            "Top 20 (1-20)": get_macro_points(owner, 1, 20),
+            "Middle 10 (11-20)": get_macro_points(owner, 11, 20),
+            "Bottom 10 (21-30)": get_macro_points(owner, 21, 30)
+        })
+    
+    macro_df = pd.DataFrame(macro_data).set_index("Owner")
+    st.dataframe(macro_df, use_container_width=True)
 
 def show_roster():
     st.title("Master Roster")
     st.caption("Sorted by individual team draft order (Pick 1-30)")
-    
-    master = riders_df.merge(rider_points, on=['rider_name', 'owner'], how='left').fillna(0)
+    master = riders_df.merge(rider_points, on=['rider_name', 'owner', 'team_pick'], how='left').fillna(0)
     pick_indices = list(range(1, 31))
-    
     def get_team_columns(owner_name):
         team_data = master[master['owner'] == owner_name]
         names, pts = [], []
@@ -143,57 +177,37 @@ def show_roster():
                 names.append("—")
                 pts.append(0)
         return names, pts
-
     tan_names, tan_pts = get_team_columns("Tanner")
     dan_names, dan_pts = get_team_columns("Daniel")
-
-    roster_comp = pd.DataFrame({
-        "Pick #": pick_indices,
-        "Tanner": tan_names,
-        "Pts ": tan_pts,
-        "Daniel": dan_names,
-        "Pts": dan_pts
-    })
-    
+    roster_comp = pd.DataFrame({"Pick #": pick_indices, "Tanner": tan_names, "Pts ": tan_pts, "Daniel": dan_names, "Pts": dan_pts})
     st.dataframe(roster_comp, hide_index=True, use_container_width=True)
 
 def show_point_history():
     st.title("YTD Point History")
     if not processed.empty:
-        ytd = processed.sort_values(
-            by=['Date', 'Race Name', 'pts'], 
-            ascending=[False, True, False]
-        ).copy()
-        
+        ytd = processed.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).copy()
         ytd['Date_Str'] = ytd['Date'].dt.strftime('%B %d')
-        
         def format_stage(val):
             if pd.isna(val) or val == "": return "—"
             try: return f"S{int(float(val))}"
             except: return str(val)
-        
         ytd['Stg'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
         ytd['Tier_Val'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
-        
         ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'Tier_Val', 'rider_name', 'owner', 'rank', 'pts']].copy()
         ytd_disp.columns = ['Date', 'Race', 'Stg', 'Tier', 'Rider', 'Owner', 'Pos', 'Points']
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
 
 def show_schedule():
     st.title("Full 2026 Schedule")
-    
-    # Take raw columns directly from CSV to keep the "Jan 20 – Jan 25" style
     full_sched_disp = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
-    
-    # Strip "Tier" prefix for a cleaner look if present
     full_sched_disp['tier'] = full_sched_disp['tier'].astype(str).str.replace('Tier ', '', case=False)
-    
     full_sched_disp.columns = ['Date', 'Race', 'Tier', 'Type']
     st.dataframe(full_sched_disp, hide_index=True, use_container_width=True)
 
 # --- 5. NAVIGATION ---
 pg = st.navigation([
     st.Page(show_dashboard, title="Dashboard", icon="📊"), 
+    st.Page(show_analysis, title="Analysis", icon="📈"),
     st.Page(show_roster, title="Master Roster", icon="👥"), 
     st.Page(show_point_history, title="Point History", icon="📜"),
     st.Page(show_schedule, title="Full Schedule", icon="📅")
@@ -205,4 +219,3 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
-
