@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from datetime import datetime
-import re
+import plotly.express as px  # For the stable mobile chart
 
 # --- 1. SETTINGS ---
 st.set_page_config(
@@ -10,6 +10,9 @@ st.set_page_config(
     layout="wide", 
     initial_sidebar_state="auto"
 )
+
+# Color mapping for the chart
+COLOR_MAP = {"Tanner": "#1f77b4", "Daniel": "#d62728"} # Blue and Red
 
 SCORING = {
     "Tier 1": {1: 40, 2: 36, 3: 32, 4: 28, 5: 24, 6: 20, 7: 16, 8: 12, 9: 8, 10: 4},
@@ -28,7 +31,6 @@ def normalize_name(name):
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
-        # Ensure we have a clean pick order based on CSV row order per owner
         riders['team_pick'] = riders.groupby('owner').cumcount() + 1
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
         riders['drop_date'] = pd.to_datetime(riders['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
@@ -77,7 +79,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     if not leaderboard.empty:
         display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist()
     
-    # AGGREGATE SCORES & MERGE WITH ALL RIDERS (to include 0-point riders)
     scored = processed.groupby(['owner', 'rider_name', 'team_pick'])['pts'].sum().reset_index()
     rider_points_total = riders_df[['owner', 'rider_name', 'team_pick']].merge(
         scored, on=['owner', 'rider_name', 'team_pick'], how='left'
@@ -89,7 +90,7 @@ def show_dashboard():
     st.title("2026 Fantasy Standings")
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
-        score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
+        score = int(leaderboard[leaderboard['owner'] == name]['pts'].sum()) if not leaderboard.empty else 0
         with (m1 if i == 0 else m2):
             st.metric(label=f"{name} Total", value=f"{score} Pts")
     st.divider()
@@ -102,12 +103,30 @@ def show_dashboard():
             if not top3.empty:
                 top3.columns = ['Rider', 'Pick #', 'Points']
                 st.dataframe(top3, hide_index=True, use_container_width=True)
+    
     with col_right:
         st.subheader("Season Progress")
         if not processed.empty:
             timeline = processed.groupby(['Date', 'owner'])['pts'].sum().unstack(fill_value=0)
             full_range = pd.date_range(start=timeline.index.min(), end=timeline.index.max())
-            st.line_chart(timeline.reindex(full_range, fill_value=0).cumsum(), use_container_width=True)
+            chart_data = timeline.reindex(full_range, fill_value=0).cumsum().reset_index()
+            chart_data = chart_data.melt(id_vars='index', var_name='Owner', value_name='Points')
+            chart_data.rename(columns={'index': 'Date'}, inplace=True)
+
+            fig = px.line(chart_data, x='Date', y='Points', color='Owner', 
+                          color_discrete_map=COLOR_MAP, line_shape="hv")
+            
+            # Mobile stability: Disable zoom/pan/drag
+            fig.update_layout(
+                dragmode=False,
+                xaxis=dict(fixedrange=True, title=""),
+                yaxis=dict(fixedrange=True, title="Cumulative Points"),
+                hovermode="x unified",
+                margin=dict(l=10, r=10, t=10, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
     st.divider()
     st.subheader("Recent Activity")
     if not processed.empty:
@@ -119,23 +138,16 @@ def show_dashboard():
 
 def show_analysis():
     st.title("Draft Performance Analysis")
-    st.markdown("Metrics sorted by **Draft Pick Order** to see how your draft slot strategy is paying off.")
     
     if rider_points_total.empty:
         st.info("No data available for analysis yet.")
         return
 
     groups = [
-        ("Picks 1–5", 1, 5),
-        ("Picks 6–10", 6, 10),
-        ("Picks 11–15", 11, 15),
-        ("Picks 16–20", 16, 20),
-        ("Picks 21–25", 21, 25),
-        ("Picks 26–30", 26, 30),
-        ("TOP 10 Total", 1, 10),
-        ("TOP 20 Total", 1, 20),
-        ("MID 10 Total (11–20)", 11, 20),
-        ("BOTTOM 10 Total (21–30)", 21, 30)
+        ("Picks 1–5", 1, 5), ("Picks 6–10", 6, 10), ("Picks 11–15", 11, 15),
+        ("Picks 16–20", 16, 20), ("Picks 21–25", 21, 25), ("Picks 26–30", 26, 30),
+        ("TOP 10 Total", 1, 10), ("TOP 20 Total", 1, 20),
+        ("MID 10 Total (11–20)", 11, 20), ("BOTTOM 10 Total (21–30)", 21, 30)
     ]
 
     t_wins, d_wins = 0, 0
@@ -153,17 +165,15 @@ def show_analysis():
             c1, c2 = st.columns(2)
             with c1:
                 st.write("**Tanner's Riders**")
-                # Updated Sort: team_pick ascending
-                t_df = rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick', ascending=True)
+                t_df = rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick')
                 st.dataframe(t_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
             with c2:
                 st.write("**Daniel's Riders**")
-                # Updated Sort: team_pick ascending
-                d_df = rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick', ascending=True)
+                d_df = rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick')
                 st.dataframe(d_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
 
     st.sidebar.markdown("---")
-    st.sidebar.write(f"**Segment Wins**")
+    st.sidebar.write("**Segment Wins**")
     st.sidebar.write(f"Tanner: {t_wins}")
     st.sidebar.write(f"Daniel: {d_wins}")
 
