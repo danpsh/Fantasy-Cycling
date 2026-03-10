@@ -113,52 +113,57 @@ def show_dashboard():
         st.dataframe(recent_display, hide_index=True, use_container_width=True)
 
 def show_analysis():
-    st.title("Draft Analysis")
-    st.markdown("Comparing point production based on draft slots.")
+    st.title("Draft Performance Analysis")
+    st.markdown("A deep dive into which draft segments are producing the most points.")
 
     if rider_points.empty:
         st.info("No data available for analysis yet.")
         return
 
-    # Define the Groups
-    bins = [0, 5, 10, 15, 20, 25, 30]
-    labels = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30']
+    # Helper to calculate points for specific pick ranges
+    def get_range_pts(owner, start, end):
+        return rider_points[(rider_points['owner'] == owner) & 
+                           (rider_points['team_pick'] >= start) & 
+                           (rider_points['team_pick'] <= end)]['pts'].sum()
+
+    analysis_rows = []
     
-    # Create the Tier Data
-    analysis_df = rider_points.copy()
-    analysis_df['Draft Group'] = pd.cut(analysis_df['team_pick'], bins=bins, labels=labels)
+    # Define our custom groups
+    groups = [
+        ("Picks 1-5", 1, 5),
+        ("Picks 6-10", 6, 10),
+        ("Picks 11-15", 11, 15),
+        ("Picks 16-20", 16, 20),
+        ("Picks 21-25", 21, 25),
+        ("Picks 26-30", 26, 30),
+        ("---", 0, 0), # Divider row
+        ("TOP 10 Total", 1, 10),
+        ("TOP 20 Total", 1, 20),
+        ("MID 10 Total (11-20)", 11, 20),
+        ("BOTTOM 10 Total (21-30)", 21, 30)
+    ]
+
+    for label, start, end in groups:
+        if label == "---":
+            analysis_rows.append({"Metric": "--------------------", "Tanner": "", "Daniel": ""})
+            continue
+            
+        row = {"Metric": label}
+        for owner in ["Tanner", "Daniel"]:
+            row[owner] = int(get_range_pts(owner, start, end))
+        analysis_rows.append(row)
+
+    combined_df = pd.DataFrame(analysis_rows)
     
-    tier_summary = analysis_df.groupby(['Draft Group', 'owner'], observed=False)['pts'].sum().unstack().fillna(0)
-
-    # 1. Tier Table
-    st.subheader("Points by Draft Group")
-    st.dataframe(tier_summary, use_container_width=True)
-
-    # 2. Tier Bar Chart
-    st.bar_chart(tier_summary, use_container_width=True)
-
-    st.divider()
-
-    # 3. Macro Groups (Top 10, Mid 10, Bottom 10)
-    st.subheader("Macro Group Performance")
-    
-    def get_macro_points(owner, start, end):
-        return analysis_df[(analysis_df['owner'] == owner) & 
-                           (analysis_df['team_pick'] >= start) & 
-                           (analysis_df['team_pick'] <= end)]['pts'].sum()
-
-    macro_data = []
-    for owner in display_order:
-        macro_data.append({
-            "Owner": owner,
-            "Top 10 (1-10)": get_macro_points(owner, 1, 10),
-            "Top 20 (1-20)": get_macro_points(owner, 1, 20),
-            "Middle 10 (11-20)": get_macro_points(owner, 11, 20),
-            "Bottom 10 (21-30)": get_macro_points(owner, 21, 30)
-        })
-    
-    macro_df = pd.DataFrame(macro_data).set_index("Owner")
-    st.dataframe(macro_df, use_container_width=True)
+    st.dataframe(
+        combined_df, 
+        hide_index=True, 
+        use_container_width=True,
+        column_config={
+            "Tanner": st.column_config.NumberColumn(format="%d"),
+            "Daniel": st.column_config.NumberColumn(format="%d")
+        }
+    )
 
 def show_roster():
     st.title("Master Roster")
