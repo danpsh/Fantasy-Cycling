@@ -5,7 +5,11 @@ from datetime import datetime
 import re
 
 # --- 1. SETTINGS ---
-st.set_page_config(page_title="2026 Fantasy Standings", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="2026 Fantasy Standings", 
+    layout="wide", 
+    initial_sidebar_state="auto"  # "auto" is better for mobile (collapses sidebar)
+)
 
 SCORING = {
     "Tier 1": {1: 40, 2: 36, 3: 32, 4: 28, 5: 24, 6: 20, 7: 16, 8: 12, 9: 8, 10: 4},
@@ -24,10 +28,7 @@ def normalize_name(name):
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
-        
-        # Identifies the order within the CSV for each owner specifically
         riders['team_pick'] = riders.groupby('owner').cumcount() + 1
-        
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
         riders['drop_date'] = pd.to_datetime(riders['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
         
@@ -49,7 +50,6 @@ rider_points = pd.DataFrame()
 display_order = ["Tanner", "Daniel"]
 
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
-    # Normalize master list names
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
@@ -57,26 +57,21 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     if 'Stage' in results_raw.columns:
         id_cols.append('Stage')
         
-    # Melt results and rename result name to avoid collision with master rider_name
     df_long = results_raw.melt(id_vars=id_cols, value_vars=rank_cols, var_name='Pos_Label', value_name='result_rider_name')
     df_long['rank'] = df_long['Pos_Label'].str.extract(r'(\d+)').astype(int)
     df_long['match_name'] = df_long['result_rider_name'].apply(normalize_name)
     
-    # Merge tier info from schedule
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
-    # Merge with riders_df to identify owners (this creates the 'rider_name' column we use everywhere)
     processed = df_long.merge(
         riders_df[['match_name', 'owner', 'rider_name', 'team_pick', 'add_date', 'drop_date']], 
         on='match_name', 
         how='inner'
     )
     
-    # Filter for active dates
     processed = processed[(processed['Date'] >= processed['add_date']) & (processed['Date'] <= processed['drop_date'])].copy()
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     
-    # Aggregate data
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     if not leaderboard.empty:
         display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist()
@@ -87,6 +82,8 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
 
 def show_dashboard():
     st.title("2026 Fantasy Standings")
+    
+    # Metrics - 1x2 on Desktop, stacks on Mobile
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -94,31 +91,50 @@ def show_dashboard():
             st.metric(label=f"{name} Total", value=f"{score} Pts")
 
     st.divider()
-    st.subheader("Top Scorers")
-    t1, t2 = st.columns(2)
-    for i, name in enumerate(display_order):
-        with (t1 if i == 0 else t2):
+    
+    # Top Scorers & Chart - Side-by-side on Desktop
+    col_left, col_right = st.columns([1, 2])
+    
+    with col_left:
+        st.subheader("Top Scorers")
+        for name in display_order:
             st.markdown(f"**{name} Top 3**")
             top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name', 'pts']]
             if not top3.empty:
                 top3.columns = ['Rider', 'Points']
                 st.dataframe(top3, hide_index=True, use_container_width=True)
+    
+    with col_right:
+        st.subheader("Season Progress")
+        if not processed.empty:
+            timeline = processed.groupby(['Date', 'owner'])['pts'].sum().unstack(fill_value=0)
+            full_range = pd.date_range(start=timeline.index.min(), end=timeline.index.max())
+            st.line_chart(timeline.reindex(full_range, fill_value=0).cumsum(), use_container_width=True)
 
     st.divider()
-    st.subheader("Season Progress")
+
+    # Recent Results Table (Mobile optimized with container width)
+    st.subheader("Recent Activity")
     if not processed.empty:
-        timeline = processed.groupby(['Date', 'owner'])['pts'].sum().unstack(fill_value=0)
-        full_range = pd.date_range(start=timeline.index.min(), end=timeline.index.max())
-        st.line_chart(timeline.reindex(full_range, fill_value=0).cumsum(), use_container_width=True)
+        recent = processed.sort_values('Date', ascending=False).head(15).copy()
+        recent['Date_Str'] = recent['Date'].dt.strftime('%b %d')
+        recent_display = recent[['Date_Str', 'Race Name', 'rider_name', 'owner', 'rank', 'pts']]
+        recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Pos', 'Points']
+        
+        st.dataframe(
+            recent_display, 
+            hide_index=True, 
+            use_container_width=True,
+            column_config={
+                "Points": st.column_config.NumberColumn("Pts", format="%d ⭐")
+            }
+        )
 
 def show_roster():
     st.title("Master Roster")
     st.caption("Sorted by individual team draft order (Pick 1-30)")
     
-    # Merge riders with points earned (Full Names)
     master = riders_df.merge(rider_points, on=['rider_name', 'owner'], how='left').fillna(0)
-    
-    # Unified pick numbers 1-30
     pick_indices = list(range(1, 31))
     
     def get_team_columns(owner_name):
