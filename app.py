@@ -94,7 +94,7 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
 # --- 4. PAGE FUNCTIONS ---
 
 def show_dashboard():
-    st.title("2026 Fantasy Standings")
+    st.title("2026 Fantasy Cycling")
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = int(leaderboard[leaderboard['owner'] == name]['pts'].sum()) if not leaderboard.empty else 0
@@ -238,4 +238,5 @@ pg = st.navigation([
 ])
 
 pg.run()
+
 
