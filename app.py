@@ -11,8 +11,8 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Color mapping for the chart
-COLOR_MAP = {"Tanner": "#1f77b4", "Daniel": "#d62728"} # Blue and Red
+# Color mapping for the chart - Tanner (Blue) and Daniel (Red)
+COLOR_MAP = {"Tanner": "#1f77b4", "Daniel": "#d62728"}
 
 SCORING = {
     "Tier 1": {1: 40, 2: 36, 3: 32, 4: 28, 5: 24, 6: 20, 7: 16, 8: 12, 9: 8, 10: 4},
@@ -31,6 +31,7 @@ def normalize_name(name):
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
+        # Assign Draft Slot based on row order in CSV per owner
         riders['team_pick'] = riders.groupby('owner').cumcount() + 1
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
         riders['drop_date'] = pd.to_datetime(riders['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
@@ -98,11 +99,11 @@ def show_dashboard():
     with col_left:
         st.subheader("Top Scorers")
         for name in display_order:
-            st.markdown(f"**{name} Top 3**")
-            top3 = rider_points_total[rider_points_total['owner'] == name].nlargest(3, 'pts')[['rider_name', 'team_pick', 'pts']]
-            if not top3.empty:
-                top3.columns = ['Rider', 'Pick Number', 'Points']
-                st.dataframe(top3, hide_index=True, use_container_width=True)
+            st.markdown(f"**{name} Top 5**")
+            top5 = rider_points_total[rider_points_total['owner'] == name].nlargest(5, 'pts')[['rider_name', 'pts']]
+            if not top5.empty:
+                top5.columns = ['Rider', 'Points']
+                st.dataframe(top5, hide_index=True, use_container_width=True)
     
     with col_right:
         st.subheader("Season Progress")
@@ -165,11 +166,11 @@ def show_analysis():
             with c1:
                 st.write("**Tanner's Riders**")
                 t_df = rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick')
-                st.dataframe(t_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
+                st.dataframe(t_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Slot','rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
             with c2:
                 st.write("**Daniel's Riders**")
                 d_df = rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick')
-                st.dataframe(d_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
+                st.dataframe(d_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Slot','rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
 
     st.sidebar.markdown("---")
     st.sidebar.write("**Segment Wins**")
@@ -178,7 +179,7 @@ def show_analysis():
 
 def show_roster():
     st.title("Master Roster")
-    st.caption("Sorted by individual team draft order (Pick 1-30)")
+    st.caption("Sorted by individual team draft order (Slot 1-30)")
     pick_indices = list(range(1, 31))
     def get_team_columns(owner_name):
         team_data = rider_points_total[rider_points_total['owner'] == owner_name]
@@ -194,7 +195,7 @@ def show_roster():
         return names, pts
     tan_names, tan_pts = get_team_columns("Tanner")
     dan_names, dan_pts = get_team_columns("Daniel")
-    roster_comp = pd.DataFrame({"Pick Number": pick_indices, "Tanner": tan_names, "Tanner Points": tan_pts, "Daniel": dan_names, "Daniel Points": dan_pts})
+    roster_comp = pd.DataFrame({"Draft Slot": pick_indices, "Tanner": tan_names, "Points ": tan_pts, "Daniel": dan_names, "Points": dan_pts})
     st.dataframe(roster_comp, hide_index=True, use_container_width=True)
 
 def show_point_history():
