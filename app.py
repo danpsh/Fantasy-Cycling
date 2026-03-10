@@ -28,6 +28,7 @@ def normalize_name(name):
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
+        # Ensure we have a clean pick order based on CSV row order per owner
         riders['team_pick'] = riders.groupby('owner').cumcount() + 1
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
         riders['drop_date'] = pd.to_datetime(riders['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
@@ -97,9 +98,9 @@ def show_dashboard():
         st.subheader("Top Scorers")
         for name in display_order:
             st.markdown(f"**{name} Top 3**")
-            top3 = rider_points_total[rider_points_total['owner'] == name].nlargest(3, 'pts')[['rider_name', 'pts']]
+            top3 = rider_points_total[rider_points_total['owner'] == name].nlargest(3, 'pts')[['rider_name', 'team_pick', 'pts']]
             if not top3.empty:
-                top3.columns = ['Rider', 'Points']
+                top3.columns = ['Rider', 'Pick #', 'Points']
                 st.dataframe(top3, hide_index=True, use_container_width=True)
     with col_right:
         st.subheader("Season Progress")
@@ -118,6 +119,7 @@ def show_dashboard():
 
 def show_analysis():
     st.title("Draft Performance Analysis")
+    st.markdown("Metrics sorted by **Draft Pick Order** to see how your draft slot strategy is paying off.")
     
     if rider_points_total.empty:
         st.info("No data available for analysis yet.")
@@ -136,7 +138,6 @@ def show_analysis():
         ("BOTTOM 10 Total (21–30)", 21, 30)
     ]
 
-    # Quick Summary Stat
     t_wins, d_wins = 0, 0
     
     for label, start, end in groups:
@@ -152,12 +153,14 @@ def show_analysis():
             c1, c2 = st.columns(2)
             with c1:
                 st.write("**Tanner's Riders**")
-                t_df = rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values(['pts', 'team_pick'], ascending=[False, True])
-                st.dataframe(t_df[['rider_name', 'pts']].rename(columns={'rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
+                # Updated Sort: team_pick ascending
+                t_df = rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick', ascending=True)
+                st.dataframe(t_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
             with c2:
                 st.write("**Daniel's Riders**")
-                d_df = rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values(['pts', 'team_pick'], ascending=[False, True])
-                st.dataframe(d_df[['rider_name', 'pts']].rename(columns={'rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
+                # Updated Sort: team_pick ascending
+                d_df = rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick', ascending=True)
+                st.dataframe(d_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
 
     st.sidebar.markdown("---")
     st.sidebar.write(f"**Segment Wins**")
