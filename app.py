@@ -46,7 +46,7 @@ riders_df, schedule_df, results_raw = load_all_data()
 
 processed = pd.DataFrame()
 leaderboard = pd.DataFrame()
-rider_points = pd.DataFrame()
+rider_points_total = pd.DataFrame()
 display_order = ["Tanner", "Daniel"]
 
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
@@ -75,9 +75,12 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     if not leaderboard.empty:
         display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist()
-        
-    # Aggregate points per rider, keeping track of owner and their original draft pick #
-    rider_points = processed.groupby(['owner', 'rider_name', 'team_pick'])['pts'].sum().reset_index()
+    
+    # AGGREGATE SCORES & MERGE WITH ALL RIDERS (to include 0-point riders)
+    scored = processed.groupby(['owner', 'rider_name', 'team_pick'])['pts'].sum().reset_index()
+    rider_points_total = riders_df[['owner', 'rider_name', 'team_pick']].merge(
+        scored, on=['owner', 'rider_name', 'team_pick'], how='left'
+    ).fillna(0)
 
 # --- 4. PAGE FUNCTIONS ---
 
@@ -94,7 +97,7 @@ def show_dashboard():
         st.subheader("Top Scorers")
         for name in display_order:
             st.markdown(f"**{name} Top 3**")
-            top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name', 'pts']]
+            top3 = rider_points_total[rider_points_total['owner'] == name].nlargest(3, 'pts')[['rider_name', 'pts']]
             if not top3.empty:
                 top3.columns = ['Rider', 'Points']
                 st.dataframe(top3, hide_index=True, use_container_width=True)
@@ -115,9 +118,8 @@ def show_dashboard():
 
 def show_analysis():
     st.title("Draft Performance Analysis")
-    st.markdown("Click any group to see a breakdown of riders and their points.")
-
-    if rider_points.empty:
+    
+    if rider_points_total.empty:
         st.info("No data available for analysis yet.")
         return
 
@@ -134,43 +136,40 @@ def show_analysis():
         ("BOTTOM 10 Total (21–30)", 21, 30)
     ]
 
+    # Quick Summary Stat
+    t_wins, d_wins = 0, 0
+    
     for label, start, end in groups:
-        # Calculate totals
-        t_pts = int(rider_points[(rider_points['owner'] == "Tanner") & (rider_points['team_pick'] >= start) & (rider_points['team_pick'] <= end)]['pts'].sum())
-        d_pts = int(rider_points[(rider_points['owner'] == "Daniel") & (rider_points['team_pick'] >= start) & (rider_points['team_pick'] <= end)]['pts'].sum())
+        t_pts = int(rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)]['pts'].sum())
+        d_pts = int(rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)]['pts'].sum())
         
-        # Winner Logic
         t_check = "✅" if t_pts > d_pts else ""
         d_check = "✅" if d_pts > t_pts else ""
-        if t_pts == d_pts and t_pts > 0: t_check = d_check = "🤝"
+        if t_pts > d_pts: t_wins += 1
+        elif d_pts > t_pts: d_wins += 1
 
-        # Create the Dropdown (Expander)
         with st.expander(f"**{label}** — Tanner: {t_pts} {t_check} | Daniel: {d_pts} {d_check}"):
             c1, c2 = st.columns(2)
-            
             with c1:
                 st.write("**Tanner's Riders**")
-                t_riders = rider_points[(rider_points['owner'] == "Tanner") & (rider_points['team_pick'] >= start) & (rider_points['team_pick'] <= end)].sort_values('pts', ascending=False)
-                if not t_riders.empty:
-                    st.dataframe(t_riders[['rider_name', 'pts']].rename(columns={'rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
-                else:
-                    st.caption("No points scored.")
-
+                t_df = rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values(['pts', 'team_pick'], ascending=[False, True])
+                st.dataframe(t_df[['rider_name', 'pts']].rename(columns={'rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
             with c2:
                 st.write("**Daniel's Riders**")
-                d_riders = rider_points[(rider_points['owner'] == "Daniel") & (rider_points['team_pick'] >= start) & (rider_points['team_pick'] <= end)].sort_values('pts', ascending=False)
-                if not d_riders.empty:
-                    st.dataframe(d_riders[['rider_name', 'pts']].rename(columns={'rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
-                else:
-                    st.caption("No points scored.")
+                d_df = rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values(['pts', 'team_pick'], ascending=[False, True])
+                st.dataframe(d_df[['rider_name', 'pts']].rename(columns={'rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
+
+    st.sidebar.markdown("---")
+    st.sidebar.write(f"**Segment Wins**")
+    st.sidebar.write(f"Tanner: {t_wins}")
+    st.sidebar.write(f"Daniel: {d_wins}")
 
 def show_roster():
     st.title("Master Roster")
     st.caption("Sorted by individual team draft order (Pick 1-30)")
-    master = riders_df.merge(rider_points, on=['rider_name', 'owner', 'team_pick'], how='left').fillna(0)
     pick_indices = list(range(1, 31))
     def get_team_columns(owner_name):
-        team_data = master[master['owner'] == owner_name]
+        team_data = rider_points_total[rider_points_total['owner'] == owner_name]
         names, pts = [], []
         for p in pick_indices:
             row = team_data[team_data['team_pick'] == p]
