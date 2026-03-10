@@ -136,11 +136,10 @@ def show_analysis():
         ("Picks 16-20", 16, 20),
         ("Picks 21-25", 21, 25),
         ("Picks 26-30", 26, 30),
-        ("---", 0, 0), # Divider row
-        ("TOP 10 Total", 1, 10),
-        ("TOP 20 Total", 1, 20),
-        ("MID 10 Total (11-20)", 11, 20),
-        ("BOTTOM 10 Total (21-30)", 21, 30)
+        ("Top 10 Total", 1, 10),
+        ("Top 20 Total", 1, 20),
+        ("Middle 10 Total (11-20)", 11, 20),
+        ("Bottom 10 Total (21-30)", 21, 30)
     ]
 
     for label, start, end in groups:
@@ -224,3 +223,4 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
+
