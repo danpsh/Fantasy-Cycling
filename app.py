@@ -118,16 +118,11 @@ def show_dashboard():
             ascending=[False, True, False]
         ).head(15).copy()
         
-        # Using %B for Full Month Name
         recent['Date_Str'] = recent['Date'].dt.strftime('%B %d')
         recent_display = recent[['Date_Str', 'Race Name', 'rider_name', 'owner', 'rank', 'pts']]
         recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Pos', 'Points']
         
-        st.dataframe(
-            recent_display, 
-            hide_index=True, 
-            use_container_width=True
-        )
+        st.dataframe(recent_display, hide_index=True, use_container_width=True)
 
 def show_roster():
     st.title("Master Roster")
@@ -170,7 +165,6 @@ def show_point_history():
             ascending=[False, True, False]
         ).copy()
         
-        # Using %B for Full Month Name
         ytd['Date_Str'] = ytd['Date'].dt.strftime('%B %d')
         
         def format_stage(val):
@@ -184,19 +178,16 @@ def show_point_history():
         ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'Tier_Val', 'rider_name', 'owner', 'rank', 'pts']].copy()
         ytd_disp.columns = ['Date', 'Race', 'Stg', 'Tier', 'Rider', 'Owner', 'Pos', 'Points']
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
-    else:
-        st.info("No scoring data available yet.")
 
 def show_schedule():
     st.title("Full 2026 Schedule")
-    full_sched = schedule_df.copy()
     
-    # Convert string dates to datetime if they aren't already for proper formatting
-    full_sched['date'] = pd.to_datetime(full_sched['date'], errors='coerce')
-    full_sched['Date_Str'] = full_sched['date'].dt.strftime('%B %d')
+    # Take raw columns directly from CSV to keep the "Jan 20 – Jan 25" style
+    full_sched_disp = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     
-    full_sched_disp = full_sched[['Date_Str', 'race_name', 'tier', 'race_type']].copy()
-    full_sched_disp['tier'] = full_sched_disp['tier'].str.replace('Tier ', '', case=False)
+    # Strip "Tier" prefix for a cleaner look if present
+    full_sched_disp['tier'] = full_sched_disp['tier'].astype(str).str.replace('Tier ', '', case=False)
+    
     full_sched_disp.columns = ['Date', 'Race', 'Tier', 'Type']
     st.dataframe(full_sched_disp, hide_index=True, use_container_width=True)
 
