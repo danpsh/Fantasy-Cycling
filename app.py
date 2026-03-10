@@ -6,7 +6,7 @@ import plotly.express as px  # For the stable mobile chart
 
 # --- 1. SETTINGS ---
 st.set_page_config(
-    page_title="2026 Fantasy Standings", 
+    page_title="2026 Fantasy Cycling", 
     layout="wide", 
     initial_sidebar_state="auto"
 )
@@ -243,3 +243,4 @@ with st.sidebar:
         st.rerun()
 
 pg.run()
+
