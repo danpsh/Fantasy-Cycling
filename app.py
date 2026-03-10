@@ -20,18 +20,12 @@ def normalize_name(name):
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return name.lower().replace('-', ' ').strip()
 
-def shorten_name(name):
-    if not isinstance(name, str) or not name.strip(): return ""
-    parts = name.split()
-    return f"{parts[0][0]}. {' '.join(parts[1:])}" if len(parts) > 1 else name
-
 @st.cache_data(ttl=300)
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
         
-        # This identifies the order within the CSV for each owner specifically
-        # If Tanner is row 1, 3, 5... they become his picks 1, 2, 3...
+        # Identifies the order within the CSV for each owner specifically
         riders['team_pick'] = riders.groupby('owner').cumcount() + 1
         
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
@@ -68,6 +62,7 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
+    # Merge using rider_name from the riders_df to keep full names consistent
     processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name', 'team_pick', 'add_date', 'drop_date']], on='match_name', how='inner')
     processed = processed[(processed['Date'] >= processed['add_date']) & (processed['Date'] <= processed['drop_date'])].copy()
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
@@ -76,7 +71,7 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     if not leaderboard.empty:
         display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist()
         
-    rider_points = processed.groupby(['owner', 'rider_name_y'])['pts'].sum().reset_index()
+    rider_points = processed.groupby(['owner', 'rider_name'])['pts'].sum().reset_index()
 
 # --- 4. PAGE FUNCTIONS ---
 
@@ -94,9 +89,8 @@ def show_dashboard():
     for i, name in enumerate(display_order):
         with (t1 if i == 0 else t2):
             st.markdown(f"**{name} Top 3**")
-            top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name_y', 'pts']]
+            top3 = rider_points[rider_points['owner'] == name].nlargest(3, 'pts')[['rider_name', 'pts']]
             if not top3.empty:
-                top3['rider_name_y'] = top3['rider_name_y'].apply(shorten_name)
                 top3.columns = ['Rider', 'Points']
                 st.dataframe(top3, hide_index=True, use_container_width=True)
 
@@ -111,25 +105,36 @@ def show_roster():
     st.title("Master Roster")
     st.caption("Sorted by individual team draft order (Pick 1-30)")
     
-    master = riders_df.merge(rider_points, left_on=['rider_name', 'owner'], right_on=['rider_name_y', 'owner'], how='left').fillna(0)
-    master['short_name'] = master['rider_name'].apply(shorten_name)
+    # Merge riders with points earned
+    master = riders_df.merge(rider_points, on=['rider_name', 'owner'], how='left').fillna(0)
     
-    # Split teams and sort by their internal pick number
-    tan_roster = master[master['owner'] == 'Tanner'].sort_values('team_pick')
-    dan_roster = master[master['owner'] == 'Daniel'].sort_values('team_pick')
+    # Create a range of possible picks (usually 1-30)
+    max_picks = int(master['team_pick'].max()) if not master.empty else 30
+    pick_indices = list(range(1, max_picks + 1))
     
-    max_len = max(len(tan_roster), len(dan_roster))
-    
-    def pad_list(df, col, default=""):
-        return df[col].tolist() + [default] * (max_len - len(df))
+    # Helper to build column data aligned by pick number
+    def get_team_columns(owner_name):
+        team_data = master[master['owner'] == owner_name]
+        names, pts = [], []
+        for p in pick_indices:
+            row = team_data[team_data['team_pick'] == p]
+            if not row.empty:
+                names.append(row.iloc[0]['rider_name'])
+                pts.append(int(row.iloc[0]['pts']))
+            else:
+                names.append("—")
+                pts.append(0)
+        return names, pts
+
+    tan_names, tan_pts = get_team_columns("Tanner")
+    dan_names, dan_pts = get_team_columns("Daniel")
 
     roster_comp = pd.DataFrame({
-        "#": pad_list(tan_roster, 'team_pick', ""),
-        "Tanner": pad_list(tan_roster, 'short_name'),
-        "Pts ": pad_list(tan_roster, 'pts', 0),
-        " ##": pad_list(dan_roster, 'team_pick', ""),
-        "Daniel": pad_list(dan_roster, 'short_name'),
-        "Pts": pad_list(dan_roster, 'pts', 0)
+        "Pick #": pick_indices,
+        "Tanner": tan_names,
+        "Pts ": tan_pts,
+        "Daniel": dan_names,
+        "Pts": dan_pts
     })
     
     st.dataframe(roster_comp, hide_index=True, use_container_width=True)
@@ -148,7 +153,7 @@ def show_point_history():
         ytd['Stg'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
         ytd['Tier_Val'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
         
-        ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'Tier_Val', 'rider_name_y', 'owner', 'rank', 'pts']].copy()
+        ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'Tier_Val', 'rider_name', 'owner', 'rank', 'pts']].copy()
         ytd_disp.columns = ['Date', 'Race', 'Stg', 'Tier', 'Rider', 'Owner', 'Pos', 'Points']
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
     else:
