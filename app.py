@@ -92,7 +92,7 @@ def show_dashboard():
     for i, name in enumerate(display_order):
         score = int(leaderboard[leaderboard['owner'] == name]['pts'].sum()) if not leaderboard.empty else 0
         with (m1 if i == 0 else m2):
-            st.metric(label=f"{name} Total", value=f"{score} Pts")
+            st.metric(label=f"{name} Total", value=f"{score} Points")
     st.divider()
     col_left, col_right = st.columns([1, 2])
     with col_left:
@@ -101,7 +101,7 @@ def show_dashboard():
             st.markdown(f"**{name} Top 3**")
             top3 = rider_points_total[rider_points_total['owner'] == name].nlargest(3, 'pts')[['rider_name', 'team_pick', 'pts']]
             if not top3.empty:
-                top3.columns = ['Rider', 'Pick #', 'Points']
+                top3.columns = ['Rider', 'Pick Number', 'Points']
                 st.dataframe(top3, hide_index=True, use_container_width=True)
     
     with col_right:
@@ -116,7 +116,6 @@ def show_dashboard():
             fig = px.line(chart_data, x='Date', y='Points', color='Owner', 
                           color_discrete_map=COLOR_MAP, line_shape="hv")
             
-            # Mobile stability: Disable zoom/pan/drag
             fig.update_layout(
                 dragmode=False,
                 xaxis=dict(fixedrange=True, title=""),
@@ -133,7 +132,7 @@ def show_dashboard():
         recent = processed.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).head(15).copy()
         recent['Date_Str'] = recent['Date'].dt.strftime('%B %d')
         recent_display = recent[['Date_Str', 'Race Name', 'rider_name', 'owner', 'rank', 'pts']]
-        recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Pos', 'Points']
+        recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Position', 'Points']
         st.dataframe(recent_display, hide_index=True, use_container_width=True)
 
 def show_analysis():
@@ -147,7 +146,7 @@ def show_analysis():
         ("Picks 1–5", 1, 5), ("Picks 6–10", 6, 10), ("Picks 11–15", 11, 15),
         ("Picks 16–20", 16, 20), ("Picks 21–25", 21, 25), ("Picks 26–30", 26, 30),
         ("TOP 10 Total", 1, 10), ("TOP 20 Total", 1, 20),
-        ("MID 10 Total (11–20)", 11, 20), ("BOTTOM 10 Total (21–30)", 21, 30)
+        ("MIDDLE 10 Total (11–20)", 11, 20), ("BOTTOM 10 Total (21–30)", 21, 30)
     ]
 
     t_wins, d_wins = 0, 0
@@ -166,11 +165,11 @@ def show_analysis():
             with c1:
                 st.write("**Tanner's Riders**")
                 t_df = rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick')
-                st.dataframe(t_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
+                st.dataframe(t_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
             with c2:
                 st.write("**Daniel's Riders**")
                 d_df = rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick')
-                st.dataframe(d_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Pts'}), hide_index=True, use_container_width=True)
+                st.dataframe(d_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Pick','rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
 
     st.sidebar.markdown("---")
     st.sidebar.write("**Segment Wins**")
@@ -195,29 +194,29 @@ def show_roster():
         return names, pts
     tan_names, tan_pts = get_team_columns("Tanner")
     dan_names, dan_pts = get_team_columns("Daniel")
-    roster_comp = pd.DataFrame({"Pick #": pick_indices, "Tanner": tan_names, "Pts ": tan_pts, "Daniel": dan_names, "Pts": dan_pts})
+    roster_comp = pd.DataFrame({"Pick Number": pick_indices, "Tanner": tan_names, "Tanner Points": tan_pts, "Daniel": dan_names, "Daniel Points": dan_pts})
     st.dataframe(roster_comp, hide_index=True, use_container_width=True)
 
 def show_point_history():
-    st.title("YTD Point History")
+    st.title("Year-to-Date Point History")
     if not processed.empty:
         ytd = processed.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).copy()
         ytd['Date_Str'] = ytd['Date'].dt.strftime('%B %d')
         def format_stage(val):
             if pd.isna(val) or val == "": return "—"
-            try: return f"S{int(float(val))}"
+            try: return f"Stage {int(float(val))}"
             except: return str(val)
-        ytd['Stg'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
+        ytd['Full_Stage'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
         ytd['Tier_Val'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
-        ytd_disp = ytd[['Date_Str', 'Race Name', 'Stg', 'Tier_Val', 'rider_name', 'owner', 'rank', 'pts']].copy()
-        ytd_disp.columns = ['Date', 'Race', 'Stg', 'Tier', 'Rider', 'Owner', 'Pos', 'Points']
+        ytd_disp = ytd[['Date_Str', 'Race Name', 'Full_Stage', 'Tier_Val', 'rider_name', 'owner', 'rank', 'pts']].copy()
+        ytd_disp.columns = ['Date', 'Race', 'Stage', 'Tier', 'Rider', 'Owner', 'Position', 'Points']
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
 
 def show_schedule():
     st.title("Full 2026 Schedule")
     full_sched_disp = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     full_sched_disp['tier'] = full_sched_disp['tier'].astype(str).str.replace('Tier ', '', case=False)
-    full_sched_disp.columns = ['Date', 'Race', 'Tier', 'Type']
+    full_sched_disp.columns = ['Date', 'Race', 'Tier', 'Race Type']
     st.dataframe(full_sched_disp, hide_index=True, use_container_width=True)
 
 # --- 5. NAVIGATION ---
