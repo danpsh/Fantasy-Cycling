@@ -49,6 +49,7 @@ rider_points = pd.DataFrame()
 display_order = ["Tanner", "Daniel"]
 
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
+    # Normalize master list names
     riders_df['match_name'] = riders_df['rider_name'].apply(normalize_name)
     
     rank_cols = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
@@ -56,17 +57,26 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     if 'Stage' in results_raw.columns:
         id_cols.append('Stage')
         
-    df_long = results_raw.melt(id_vars=id_cols, value_vars=rank_cols, var_name='Pos_Label', value_name='rider_name')
+    # Melt results and rename result name to avoid collision with master rider_name
+    df_long = results_raw.melt(id_vars=id_cols, value_vars=rank_cols, var_name='Pos_Label', value_name='result_rider_name')
     df_long['rank'] = df_long['Pos_Label'].str.extract(r'(\d+)').astype(int)
-    df_long['match_name'] = df_long['rider_name'].apply(normalize_name)
+    df_long['match_name'] = df_long['result_rider_name'].apply(normalize_name)
     
+    # Merge tier info from schedule
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
-    # Merge using rider_name from the riders_df to keep full names consistent
-    processed = df_long.merge(riders_df[['match_name', 'owner', 'rider_name', 'team_pick', 'add_date', 'drop_date']], on='match_name', how='inner')
+    # Merge with riders_df to identify owners (this creates the 'rider_name' column we use everywhere)
+    processed = df_long.merge(
+        riders_df[['match_name', 'owner', 'rider_name', 'team_pick', 'add_date', 'drop_date']], 
+        on='match_name', 
+        how='inner'
+    )
+    
+    # Filter for active dates
     processed = processed[(processed['Date'] >= processed['add_date']) & (processed['Date'] <= processed['drop_date'])].copy()
     processed['pts'] = processed.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
     
+    # Aggregate data
     leaderboard = processed.groupby('owner')['pts'].sum().reset_index()
     if not leaderboard.empty:
         display_order = leaderboard.sort_values('pts', ascending=False)['owner'].tolist()
@@ -105,14 +115,12 @@ def show_roster():
     st.title("Master Roster")
     st.caption("Sorted by individual team draft order (Pick 1-30)")
     
-    # Merge riders with points earned
+    # Merge riders with points earned (Full Names)
     master = riders_df.merge(rider_points, on=['rider_name', 'owner'], how='left').fillna(0)
     
-    # Create a range of possible picks (usually 1-30)
-    max_picks = int(master['team_pick'].max()) if not master.empty else 30
-    pick_indices = list(range(1, max_picks + 1))
+    # Unified pick numbers 1-30
+    pick_indices = list(range(1, 31))
     
-    # Helper to build column data aligned by pick number
     def get_team_columns(owner_name):
         team_data = master[master['owner'] == owner_name]
         names, pts = [], []
