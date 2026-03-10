@@ -8,7 +8,7 @@ import re
 st.set_page_config(
     page_title="2026 Fantasy Standings", 
     layout="wide", 
-    initial_sidebar_state="auto"  # "auto" is better for mobile (collapses sidebar)
+    initial_sidebar_state="auto"
 )
 
 SCORING = {
@@ -83,7 +83,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
 def show_dashboard():
     st.title("2026 Fantasy Standings")
     
-    # Metrics - 1x2 on Desktop, stacks on Mobile
     m1, m2 = st.columns(2)
     for i, name in enumerate(display_order):
         score = leaderboard[leaderboard['owner'] == name]['pts'].sum() if not leaderboard.empty else 0
@@ -92,7 +91,6 @@ def show_dashboard():
 
     st.divider()
     
-    # Top Scorers & Chart - Side-by-side on Desktop
     col_left, col_right = st.columns([1, 2])
     
     with col_left:
@@ -113,21 +111,22 @@ def show_dashboard():
 
     st.divider()
 
-    # Recent Results Table (Mobile optimized with container width)
     st.subheader("Recent Activity")
     if not processed.empty:
-        recent = processed.sort_values('Date', ascending=False).head(15).copy()
-        recent['Date_Str'] = recent['Date'].dt.strftime('%b %d')
+        recent = processed.sort_values(
+            by=['Date', 'Race Name', 'pts'], 
+            ascending=[False, True, False]
+        ).head(15).copy()
+        
+        # Using %B for Full Month Name
+        recent['Date_Str'] = recent['Date'].dt.strftime('%B %d')
         recent_display = recent[['Date_Str', 'Race Name', 'rider_name', 'owner', 'rank', 'pts']]
         recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Pos', 'Points']
         
         st.dataframe(
             recent_display, 
             hide_index=True, 
-            use_container_width=True,
-            column_config={
-                "Points": st.column_config.NumberColumn("Pts", format="%d ⭐")
-            }
+            use_container_width=True
         )
 
 def show_roster():
@@ -166,8 +165,13 @@ def show_roster():
 def show_point_history():
     st.title("YTD Point History")
     if not processed.empty:
-        ytd = processed.sort_values(['Date', 'pts'], ascending=[False, False]).copy()
-        ytd['Date_Str'] = ytd['Date'].dt.strftime('%b %d')
+        ytd = processed.sort_values(
+            by=['Date', 'Race Name', 'pts'], 
+            ascending=[False, True, False]
+        ).copy()
+        
+        # Using %B for Full Month Name
+        ytd['Date_Str'] = ytd['Date'].dt.strftime('%B %d')
         
         def format_stage(val):
             if pd.isna(val) or val == "": return "—"
@@ -185,10 +189,16 @@ def show_point_history():
 
 def show_schedule():
     st.title("Full 2026 Schedule")
-    full_sched = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
-    full_sched['tier'] = full_sched['tier'].str.replace('Tier ', '', case=False)
-    full_sched.columns = ['Date', 'Race', 'Tier', 'Type']
-    st.dataframe(full_sched, hide_index=True, use_container_width=True)
+    full_sched = schedule_df.copy()
+    
+    # Convert string dates to datetime if they aren't already for proper formatting
+    full_sched['date'] = pd.to_datetime(full_sched['date'], errors='coerce')
+    full_sched['Date_Str'] = full_sched['date'].dt.strftime('%B %d')
+    
+    full_sched_disp = full_sched[['Date_Str', 'race_name', 'tier', 'race_type']].copy()
+    full_sched_disp['tier'] = full_sched_disp['tier'].str.replace('Tier ', '', case=False)
+    full_sched_disp.columns = ['Date', 'Race', 'Tier', 'Type']
+    st.dataframe(full_sched_disp, hide_index=True, use_container_width=True)
 
 # --- 5. NAVIGATION ---
 pg = st.navigation([
