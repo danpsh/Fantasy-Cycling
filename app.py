@@ -6,7 +6,7 @@ import plotly.express as px  # For the stable mobile chart
 
 # --- 1. SETTINGS ---
 st.set_page_config(
-    page_title="2026 Fantasy Cycling", 
+    page_title="2026 Fantasy Standings", 
     layout="wide", 
     initial_sidebar_state="auto"
 )
@@ -237,10 +237,4 @@ pg = st.navigation([
     st.Page(show_schedule, title="Full Schedule", icon="📅")
 ])
 
-with st.sidebar:
-    if st.button("Refresh Data", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-
 pg.run()
-
