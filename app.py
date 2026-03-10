@@ -27,11 +27,17 @@ def normalize_name(name):
     name = "".join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn')
     return name.lower().replace('-', ' ').strip()
 
+def get_ordinal(n):
+    if 11 <= (n % 100) <= 13:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return str(n) + suffix
+
 @st.cache_data(ttl=300)
 def load_all_data():
     try:
         riders = pd.read_csv('riders.csv')
-        # Assign Draft Slot based on row order in CSV per owner
         riders['team_pick'] = riders.groupby('owner').cumcount() + 1
         riders['add_date'] = pd.to_datetime(riders['add_date'], errors='coerce')
         riders['drop_date'] = pd.to_datetime(riders['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
@@ -132,8 +138,9 @@ def show_dashboard():
     if not processed.empty:
         recent = processed.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).head(15).copy()
         recent['Date_Str'] = recent['Date'].dt.strftime('%B %d')
-        recent_display = recent[['Date_Str', 'Race Name', 'rider_name', 'owner', 'rank', 'pts']]
-        recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Position', 'Points']
+        recent['Place_Label'] = recent['rank'].apply(get_ordinal)
+        recent_display = recent[['Date_Str', 'Race Name', 'rider_name', 'owner', 'Place_Label', 'pts']]
+        recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Place', 'Points']
         st.dataframe(recent_display, hide_index=True, use_container_width=True)
 
 def show_analysis():
@@ -209,8 +216,9 @@ def show_point_history():
             except: return str(val)
         ytd['Full_Stage'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
         ytd['Tier_Val'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
-        ytd_disp = ytd[['Date_Str', 'Race Name', 'Full_Stage', 'Tier_Val', 'rider_name', 'owner', 'rank', 'pts']].copy()
-        ytd_disp.columns = ['Date', 'Race', 'Stage', 'Tier', 'Rider', 'Owner', 'Position', 'Points']
+        ytd['Place_Label'] = ytd['rank'].apply(get_ordinal)
+        ytd_disp = ytd[['Date_Str', 'Race Name', 'Full_Stage', 'Tier_Val', 'rider_name', 'owner', 'Place_Label', 'pts']].copy()
+        ytd_disp.columns = ['Date', 'Race', 'Stage', 'Tier', 'Rider', 'Owner', 'Place', 'Points']
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
 
 def show_schedule():
