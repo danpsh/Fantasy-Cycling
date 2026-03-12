@@ -226,12 +226,12 @@ def show_top_scorers():
     if not rider_points_total.empty:
         # Sort all riders by points
         all_tops = rider_points_total.sort_values('pts', ascending=False).copy()
-        all_tops['rank'] = range(1, len(all_tops) + 1)
+        all_tops['Rank'] = range(1, len(all_tops) + 1)
         
-        # Display the full list
-        tops_disp = all_tops[['rank', 'rider_name', 'owner', 'pts']]
+        # Display list
+        tops_disp = all_tops[['Rank', 'rider_name', 'owner', 'pts']]
         tops_disp.columns = ['Rank', 'Rider', 'Owner', 'Points']
-        tops_disp['Points'] = tops_display['Points'].astype(int) # Ensure points are integers
+        tops_disp['Points'] = tops_disp['Points'].astype(int)
         
         st.dataframe(tops_disp, hide_index=True, use_container_width=True)
     else:
@@ -245,13 +245,12 @@ def show_schedule():
     st.dataframe(full_sched_disp, hide_index=True, use_container_width=True)
 
 # --- 5. NAVIGATION ---
-# I added the new 'Top Scorers' page to the list below
 pg = st.navigation([
     st.Page(show_dashboard, title="Dashboard", icon="📊"), 
     st.Page(show_analysis, title="Analysis", icon="📈"),
     st.Page(show_roster, title="Master Roster", icon="👥"), 
     st.Page(show_point_history, title="Point History", icon="📜"),
-    st.Page(show_top_scorers, title="Top Scorers", icon="🏆"),  # <-- NEW TAB
+    st.Page(show_top_scorers, title="Top Scorers", icon="🏆"),
     st.Page(show_schedule, title="Full Schedule", icon="📅")
 ])
 
