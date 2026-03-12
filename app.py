@@ -203,13 +203,12 @@ def show_roster():
     tan_names, tan_pts = get_team_columns("Tanner")
     dan_names, dan_pts = get_team_columns("Daniel")
     
-    # Column naming per your request: Slot, Tanner, Points, Daniel, Points
     roster_comp = pd.DataFrame({
         "Slot": pick_indices, 
         "Tanner": tan_names, 
         "Points": tan_pts, 
         "Daniel": dan_names, 
-        "Points ": dan_pts  # Trailing space to allow duplicate header key in dict
+        "Points ": dan_pts
     })
     
     st.dataframe(roster_comp, hide_index=True, use_container_width=True, height=1100)
@@ -249,7 +248,8 @@ def show_schedule():
     full_sched_disp = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     full_sched_disp['tier'] = full_sched_disp['tier'].astype(str).str.replace('Tier ', '', case=False)
     full_sched_disp.columns = ['Date', 'Race', 'Tier', 'Race Type']
-    st.dataframe(full_sched_disp, hide_index=True, use_container_width=True)
+    # Height set to 2500 to expand the full season schedule without a scroll bar
+    st.dataframe(full_sched_disp, hide_index=True, use_container_width=True, height=2500)
 
 # --- 5. NAVIGATION ---
 pg = st.navigation([
