@@ -221,6 +221,22 @@ def show_point_history():
         ytd_disp.columns = ['Date', 'Race', 'Stage', 'Tier', 'Rider', 'Owner', 'Place', 'Points']
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
 
+def show_top_scorers():
+    st.title("🏆 Season Top Scorers")
+    if not rider_points_total.empty:
+        # Sort all riders by points
+        all_tops = rider_points_total.sort_values('pts', ascending=False).copy()
+        all_tops['rank'] = range(1, len(all_tops) + 1)
+        
+        # Display the full list
+        tops_disp = all_tops[['rank', 'rider_name', 'owner', 'pts']]
+        tops_disp.columns = ['Rank', 'Rider', 'Owner', 'Points']
+        tops_disp['Points'] = tops_display['Points'].astype(int) # Ensure points are integers
+        
+        st.dataframe(tops_disp, hide_index=True, use_container_width=True)
+    else:
+        st.info("No point data available yet.")
+
 def show_schedule():
     st.title("Full 2026 Schedule")
     full_sched_disp = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
@@ -229,34 +245,14 @@ def show_schedule():
     st.dataframe(full_sched_disp, hide_index=True, use_container_width=True)
 
 # --- 5. NAVIGATION ---
+# I added the new 'Top Scorers' page to the list below
 pg = st.navigation([
     st.Page(show_dashboard, title="Dashboard", icon="📊"), 
     st.Page(show_analysis, title="Analysis", icon="📈"),
     st.Page(show_roster, title="Master Roster", icon="👥"), 
     st.Page(show_point_history, title="Point History", icon="📜"),
+    st.Page(show_top_scorers, title="Top Scorers", icon="🏆"),  # <-- NEW TAB
     st.Page(show_schedule, title="Full Schedule", icon="📅")
 ])
-
-# --- 6. GLOBAL SIDEBAR (TOP SCORERS) ---
-if not rider_points_total.empty:
-    st.sidebar.markdown("### 🏆 Top Scorers")
-    
-    # Sort by points and create Rank
-    top_riders = rider_points_total.sort_values('pts', ascending=False).head(10).copy()
-    top_riders['rank'] = range(1, len(top_riders) + 1)
-    
-    # Format for display: rank, rider, owner, points
-    sidebar_top_df = top_riders[['rank', 'rider_name', 'owner', 'pts']]
-    sidebar_top_df.columns = ['Rank', 'Rider', 'Owner', 'Points']
-    
-    # Adjusting formatting for integer points
-    sidebar_top_df['Points'] = sidebar_top_df['Points'].astype(int)
-    
-    st.sidebar.dataframe(
-        sidebar_top_df, 
-        hide_index=True, 
-        use_container_width=True
-    )
-    st.sidebar.divider()
 
 pg.run()
