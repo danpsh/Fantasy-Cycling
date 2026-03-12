@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from datetime import datetime
-import plotly.express as px  # For the stable mobile chart
+import plotly.express as px
 
 # --- 1. SETTINGS ---
 st.set_page_config(
@@ -145,7 +145,6 @@ def show_dashboard():
 
 def show_analysis():
     st.title("Draft Performance Analysis")
-    
     if rider_points_total.empty:
         st.info("No data available for analysis yet.")
         return
@@ -158,7 +157,6 @@ def show_analysis():
     ]
 
     t_wins, d_wins = 0, 0
-    
     for label, start, end in groups:
         t_pts = int(rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)]['pts'].sum())
         d_pts = int(rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)]['pts'].sum())
@@ -188,6 +186,7 @@ def show_roster():
     st.title("Master Roster")
     st.caption("All 30 draft slots")
     pick_indices = list(range(1, 31))
+    
     def get_team_columns(owner_name):
         team_data = rider_points_total[rider_points_total['owner'] == owner_name]
         names, pts = [], []
@@ -200,11 +199,19 @@ def show_roster():
                 names.append("—")
                 pts.append(0)
         return names, pts
+
     tan_names, tan_pts = get_team_columns("Tanner")
     dan_names, dan_pts = get_team_columns("Daniel")
-    roster_comp = pd.DataFrame({"Slot": pick_indices, "Tanner": tan_names, "T Pts": tan_pts, "Daniel": dan_names, "D Pts": dan_pts})
     
-    # height set to 1100 to remove internal scroll bar for 30 rows
+    # Column naming per your request: Slot, Tanner, Points, Daniel, Points
+    roster_comp = pd.DataFrame({
+        "Slot": pick_indices, 
+        "Tanner": tan_names, 
+        "Points": tan_pts, 
+        "Daniel": dan_names, 
+        "Points ": dan_pts  # Trailing space to allow duplicate header key in dict
+    })
+    
     st.dataframe(roster_comp, hide_index=True, use_container_width=True, height=1100)
 
 def show_point_history():
@@ -226,7 +233,6 @@ def show_point_history():
 def show_top_scorers():
     st.title("🏆 Season Top 10 Scorers")
     if not rider_points_total.empty:
-        # Limited to top 10 as requested
         all_tops = rider_points_total.sort_values('pts', ascending=False).head(10).copy()
         all_tops['Rank'] = range(1, len(all_tops) + 1)
         
