@@ -186,7 +186,7 @@ def show_analysis():
 
 def show_roster():
     st.title("Master Roster")
-    st.caption("Sorted by individual team draft order (Slot 1-30)")
+    st.caption("All 30 draft slots")
     pick_indices = list(range(1, 31))
     def get_team_columns(owner_name):
         team_data = rider_points_total[rider_points_total['owner'] == owner_name]
@@ -202,8 +202,10 @@ def show_roster():
         return names, pts
     tan_names, tan_pts = get_team_columns("Tanner")
     dan_names, dan_pts = get_team_columns("Daniel")
-    roster_comp = pd.DataFrame({"Draft Slot": pick_indices, "Tanner": tan_names, "Points ": tan_pts, "Daniel": dan_names, "Points": dan_pts})
-    st.dataframe(roster_comp, hide_index=True, use_container_width=True)
+    roster_comp = pd.DataFrame({"Slot": pick_indices, "Tanner": tan_names, "T Pts": tan_pts, "Daniel": dan_names, "D Pts": dan_pts})
+    
+    # height set to 1100 to remove internal scroll bar for 30 rows
+    st.dataframe(roster_comp, hide_index=True, use_container_width=True, height=1100)
 
 def show_point_history():
     st.title("Year-to-Date Point History")
@@ -222,13 +224,12 @@ def show_point_history():
         st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
 
 def show_top_scorers():
-    st.title("🏆 Season Top Scorers")
+    st.title("🏆 Season Top 10 Scorers")
     if not rider_points_total.empty:
-        # Sort all riders by points
-        all_tops = rider_points_total.sort_values('pts', ascending=False).copy()
+        # Limited to top 10 as requested
+        all_tops = rider_points_total.sort_values('pts', ascending=False).head(10).copy()
         all_tops['Rank'] = range(1, len(all_tops) + 1)
         
-        # Display list
         tops_disp = all_tops[['Rank', 'rider_name', 'owner', 'pts']]
         tops_disp.columns = ['Rank', 'Rider', 'Owner', 'Points']
         tops_disp['Points'] = tops_disp['Points'].astype(int)
