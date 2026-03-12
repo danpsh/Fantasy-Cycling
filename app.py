@@ -143,6 +143,67 @@ def show_dashboard():
         recent_display.columns = ['Date', 'Race', 'Rider', 'Owner', 'Place', 'Points']
         st.dataframe(recent_display, hide_index=True, use_container_width=True)
 
+def show_point_history():
+    st.title("Year-to-Date Point History")
+    if not processed.empty:
+        ytd = processed.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).copy()
+        ytd['Date_Str'] = ytd['Date'].dt.strftime('%B %d')
+        def format_stage(val):
+            if pd.isna(val) or val == "": return "—"
+            try: return f"Stage {int(float(val))}"
+            except: return str(val)
+        ytd['Full_Stage'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
+        ytd['Tier_Val'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
+        ytd['Place_Label'] = ytd['rank'].apply(get_ordinal)
+        ytd_disp = ytd[['Date_Str', 'Race Name', 'Full_Stage', 'Tier_Val', 'rider_name', 'owner', 'Place_Label', 'pts']].copy()
+        ytd_disp.columns = ['Date', 'Race', 'Stage', 'Tier', 'Rider', 'Owner', 'Place', 'Points']
+        st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
+
+def show_top_scorers():
+    st.title("🏆 Season Top 10 Scorers")
+    if not rider_points_total.empty:
+        all_tops = rider_points_total.sort_values('pts', ascending=False).head(10).copy()
+        all_tops['Rank'] = range(1, len(all_tops) + 1)
+        
+        tops_disp = all_tops[['Rank', 'rider_name', 'owner', 'pts']]
+        tops_disp.columns = ['Rank', 'Rider', 'Owner', 'Points']
+        tops_disp['Points'] = tops_disp['Points'].astype(int)
+        
+        st.dataframe(tops_disp, hide_index=True, use_container_width=True)
+    else:
+        st.info("No point data available yet.")
+
+def show_roster():
+    st.title("Master Roster")
+    st.caption("All 30 draft slots")
+    pick_indices = list(range(1, 31))
+    
+    def get_team_columns(owner_name):
+        team_data = rider_points_total[rider_points_total['owner'] == owner_name]
+        names, pts = [], []
+        for p in pick_indices:
+            row = team_data[team_data['team_pick'] == p]
+            if not row.empty:
+                names.append(row.iloc[0]['rider_name'])
+                pts.append(int(row.iloc[0]['pts']))
+            else:
+                names.append("—")
+                pts.append(0)
+        return names, pts
+
+    tan_names, tan_pts = get_team_columns("Tanner")
+    dan_names, dan_pts = get_team_columns("Daniel")
+    
+    roster_comp = pd.DataFrame({
+        "Slot": pick_indices, 
+        "Tanner": tan_names, 
+        "Points": tan_pts, 
+        "Daniel": dan_names, 
+        "Points ": dan_pts
+    })
+    
+    st.dataframe(roster_comp, hide_index=True, use_container_width=True, height=1100)
+
 def show_analysis():
     st.title("Draft Performance Analysis")
     if rider_points_total.empty:
@@ -182,82 +243,20 @@ def show_analysis():
     st.sidebar.write(f"Tanner: {t_wins}")
     st.sidebar.write(f"Daniel: {d_wins}")
 
-def show_roster():
-    st.title("Master Roster")
-    st.caption("All 30 draft slots")
-    pick_indices = list(range(1, 31))
-    
-    def get_team_columns(owner_name):
-        team_data = rider_points_total[rider_points_total['owner'] == owner_name]
-        names, pts = [], []
-        for p in pick_indices:
-            row = team_data[team_data['team_pick'] == p]
-            if not row.empty:
-                names.append(row.iloc[0]['rider_name'])
-                pts.append(int(row.iloc[0]['pts']))
-            else:
-                names.append("—")
-                pts.append(0)
-        return names, pts
-
-    tan_names, tan_pts = get_team_columns("Tanner")
-    dan_names, dan_pts = get_team_columns("Daniel")
-    
-    roster_comp = pd.DataFrame({
-        "Slot": pick_indices, 
-        "Tanner": tan_names, 
-        "Points": tan_pts, 
-        "Daniel": dan_names, 
-        "Points ": dan_pts
-    })
-    
-    st.dataframe(roster_comp, hide_index=True, use_container_width=True, height=1100)
-
-def show_point_history():
-    st.title("Year-to-Date Point History")
-    if not processed.empty:
-        ytd = processed.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).copy()
-        ytd['Date_Str'] = ytd['Date'].dt.strftime('%B %d')
-        def format_stage(val):
-            if pd.isna(val) or val == "": return "—"
-            try: return f"Stage {int(float(val))}"
-            except: return str(val)
-        ytd['Full_Stage'] = ytd['Stage'].apply(format_stage) if 'Stage' in ytd.columns else "—"
-        ytd['Tier_Val'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
-        ytd['Place_Label'] = ytd['rank'].apply(get_ordinal)
-        ytd_disp = ytd[['Date_Str', 'Race Name', 'Full_Stage', 'Tier_Val', 'rider_name', 'owner', 'Place_Label', 'pts']].copy()
-        ytd_disp.columns = ['Date', 'Race', 'Stage', 'Tier', 'Rider', 'Owner', 'Place', 'Points']
-        st.dataframe(ytd_disp, hide_index=True, use_container_width=True)
-
-def show_top_scorers():
-    st.title("🏆 Season Top 10 Scorers")
-    if not rider_points_total.empty:
-        all_tops = rider_points_total.sort_values('pts', ascending=False).head(10).copy()
-        all_tops['Rank'] = range(1, len(all_tops) + 1)
-        
-        tops_disp = all_tops[['Rank', 'rider_name', 'owner', 'pts']]
-        tops_disp.columns = ['Rank', 'Rider', 'Owner', 'Points']
-        tops_disp['Points'] = tops_disp['Points'].astype(int)
-        
-        st.dataframe(tops_disp, hide_index=True, use_container_width=True)
-    else:
-        st.info("No point data available yet.")
-
 def show_schedule():
     st.title("Full 2026 Schedule")
     full_sched_disp = schedule_df[['date', 'race_name', 'tier', 'race_type']].copy()
     full_sched_disp['tier'] = full_sched_disp['tier'].astype(str).str.replace('Tier ', '', case=False)
     full_sched_disp.columns = ['Date', 'Race', 'Tier', 'Race Type']
-    # Height set to 2500 to expand the full season schedule without a scroll bar
     st.dataframe(full_sched_disp, hide_index=True, use_container_width=True, height=2500)
 
-# --- 5. NAVIGATION ---
+# --- 5. NAVIGATION (REARRANGED ORDER) ---
 pg = st.navigation([
     st.Page(show_dashboard, title="Dashboard", icon="📊"), 
-    st.Page(show_analysis, title="Analysis", icon="📈"),
-    st.Page(show_roster, title="Master Roster", icon="👥"), 
     st.Page(show_point_history, title="Point History", icon="📜"),
     st.Page(show_top_scorers, title="Top Scorers", icon="🏆"),
+    st.Page(show_roster, title="Master Roster", icon="👥"), 
+    st.Page(show_analysis, title="Analysis", icon="📈"),
     st.Page(show_schedule, title="Full Schedule", icon="📅")
 ])
 
