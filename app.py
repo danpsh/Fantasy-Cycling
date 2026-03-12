@@ -1,4 +1,5 @@
 import streamlit as st
+import pd
 import pandas as pd
 import unicodedata
 from datetime import datetime
@@ -237,6 +238,24 @@ pg = st.navigation([
     st.Page(show_schedule, title="Full Schedule", icon="📅")
 ])
 
+# --- 6. GLOBAL SIDEBAR ELEMENTS ---
+# This ensures the Top Scorers table shows on every page
+if not rider_points_total.empty:
+    st.sidebar.header("🏆 Season Top Scorers")
+    
+    # Get Top 10 riders across the whole league
+    top_riders = rider_points_total.nlargest(10, 'pts').copy()
+    top_riders['rank'] = range(1, len(top_riders) + 1)
+    
+    # Select requested columns: rank, rider, owner, points
+    sidebar_top_df = top_riders[['rank', 'rider_name', 'owner', 'pts']]
+    sidebar_top_df.columns = ['Rank', 'Rider', 'Owner', 'Points']
+    
+    st.sidebar.dataframe(
+        sidebar_top_df, 
+        hide_index=True, 
+        use_container_width=True
+    )
+    st.sidebar.divider()
+
 pg.run()
-
-
