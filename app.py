@@ -50,6 +50,14 @@ def check_password():
                 st.error("Incorrect passcode")
     return False
 
+def format_stage_safe(val):
+    if pd.isna(val) or str(val).strip() == "":
+        return "—"
+    try:
+        return f"Stage {int(float(val))}"
+    except (ValueError, TypeError):
+        return str(val)
+
 @st.cache_data(ttl=300)
 def load_all_data():
     try:
@@ -73,6 +81,7 @@ riders_df, schedule_df, results_raw = load_all_data()
 processed = pd.DataFrame()
 leaderboard = pd.DataFrame()
 rider_points_total = pd.DataFrame()
+df_long = pd.DataFrame()
 display_order = ["Tanner", "Daniel"]
 
 if all(v is not None for v in [riders_df, schedule_df, results_raw]):
@@ -89,7 +98,6 @@ if all(v is not None for v in [riders_df, schedule_df, results_raw]):
     
     df_long = df_long.merge(schedule_df[['race_name', 'tier']], left_on='Race Name', right_on='race_name', how='left')
     
-    # Processed contains only points scored while on a team
     processed = df_long.merge(
         riders_df[['match_name', 'owner', 'rider_name', 'team_pick', 'add_date', 'drop_date']], 
         on='match_name', 
@@ -144,7 +152,7 @@ def show_point_history():
     if not processed.empty:
         ytd = processed.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).copy()
         ytd['Date_Str'] = ytd['Date'].dt.strftime('%B %d')
-        ytd['Full_Stage'] = ytd['Stage'].apply(lambda val: f"Stage {int(float(val))}" if pd.notna(val) and val != "" else "—") if 'Stage' in ytd.columns else "—"
+        ytd['Full_Stage'] = ytd['Stage'].apply(format_stage_safe) if 'Stage' in ytd.columns else "—"
         ytd['Tier_Val'] = ytd['tier'].astype(str).str.replace('Tier ', '', case=False)
         ytd['Place_Label'] = ytd['rank'].apply(get_ordinal)
         ytd_disp = ytd[['Date_Str', 'Race Name', 'Full_Stage', 'Tier_Val', 'rider_name', 'owner', 'Place_Label', 'pts']]
@@ -182,7 +190,34 @@ def show_roster():
 
 def show_analysis():
     st.title("Draft Performance Analysis")
-    # ... [Keep your existing analysis logic here] ...
+    if rider_points_total.empty:
+        st.info("No data available for analysis yet.")
+        return
+    groups = [
+        ("Picks 1–5", 1, 5), ("Picks 6–10", 6, 10), ("Picks 11–15", 11, 15),
+        ("Picks 16–20", 16, 20), ("Picks 21–25", 21, 25), ("Picks 26–30", 26, 30),
+        ("TOP 10 Total", 1, 10), ("TOP 20 Total", 1, 20),
+        ("MIDDLE 10 Total (11–20)", 11, 20), ("BOTTOM 10 Total (21–30)", 21, 30)
+    ]
+    t_wins, d_wins = 0, 0
+    for label, start, end in groups:
+        t_pts = int(rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)]['pts'].sum())
+        d_pts = int(rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)]['pts'].sum())
+        if t_pts > d_pts: t_wins += 1
+        elif d_pts > t_pts: d_wins += 1
+        with st.expander(f"**{label}** — Tanner: {t_pts} | Daniel: {d_pts}"):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.write("**Tanner's Riders**")
+                t_df = rider_points_total[(rider_points_total['owner'] == "Tanner") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick')
+                st.dataframe(t_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Slot','rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
+            with c2:
+                st.write("**Daniel's Riders**")
+                d_df = rider_points_total[(rider_points_total['owner'] == "Daniel") & (rider_points_total['team_pick'] >= start) & (rider_points_total['team_pick'] <= end)].sort_values('team_pick')
+                st.dataframe(d_df[['team_pick', 'rider_name', 'pts']].rename(columns={'team_pick':'Slot','rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
+    st.sidebar.markdown("---")
+    st.sidebar.write("**Segment Wins**")
+    st.sidebar.write(f"Tanner: {t_wins} | Daniel: {d_wins}")
 
 def show_schedule():
     st.title("Full 2026 Schedule")
@@ -192,31 +227,16 @@ def show_schedule():
 
 def show_developer():
     st.title("🛠 Developer: All Scored Riders")
-    
-    # Calculate points for EVERYONE in results_xlsx, regardless of if they are owned
-    all_results = df_long.copy()
-    all_results['pts'] = all_results.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
-    
-    # Group by rider to get total points
-    all_scored = all_results.groupby(['result_rider_name', 'match_name'])['pts'].sum().reset_index()
-    
-    # Join with current rosters to see who owns them
-    # We use match_name for the join to handle accents/casing
-    master_list = all_scored.merge(
-        riders_df[['match_name', 'owner']], 
-        on='match_name', 
-        how='left'
-    )
-    
-    master_list['owner'] = master_list['owner'].fillna("Free Agent")
-    master_list = master_list.sort_values('pts', ascending=False)
-    
-    # Clean up display
-    display_list = master_list[['result_rider_name', 'owner', 'pts']]
-    display_list.columns = ['Rider', 'Current Owner', 'Total Points Scored']
-    
-    st.write("This table shows every rider who has appeared in the Top 10 of a race this season, including those not currently on a team.")
-    st.dataframe(display_list, hide_index=True, use_container_width=True, height=800)
+    if not df_long.empty:
+        all_results = df_long.copy()
+        all_results['pts'] = all_results.apply(lambda r: SCORING.get(r['tier'], {}).get(r['rank'], 0), axis=1)
+        all_scored = all_results.groupby(['result_rider_name', 'match_name'])['pts'].sum().reset_index()
+        master_list = all_scored.merge(riders_df[['match_name', 'owner']], on='match_name', how='left')
+        master_list['owner'] = master_list['owner'].fillna("Free Agent")
+        master_list = master_list.sort_values('pts', ascending=False)
+        display_list = master_list[['result_rider_name', 'owner', 'pts']]
+        display_list.columns = ['Rider', 'Current Owner', 'Total Points Scored']
+        st.dataframe(display_list, hide_index=True, use_container_width=True, height=800)
 
 # --- 5. NAVIGATION ---
 pages = [
