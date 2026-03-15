@@ -153,7 +153,10 @@ def show_dynasty(): render_dashboard("Dynasty", "Dynasty Fantasy Cycling Dashboa
 
 def show_point_history():
     st.title("Point History")
-    choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
+    choice = "2026"
+    if st.session_state.get("password_correct"):
+        choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
+    
     proc = leagues[choice]["proc"]
     if not proc.empty:
         ytd = proc.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).copy()
@@ -166,7 +169,10 @@ def show_point_history():
 
 def show_roster():
     st.title("Master Roster Comparison")
-    choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
+    choice = "2026"
+    if st.session_state.get("password_correct"):
+        choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
+    
     pts = leagues[choice]["pts"]
     pick_indices = list(range(1, 31))
     def get_team(owner):
@@ -184,7 +190,10 @@ def show_roster():
 
 def show_analysis():
     st.title("Draft Performance Analysis")
-    choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
+    choice = "2026"
+    if st.session_state.get("password_correct"):
+        choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
+        
     pts = leagues[choice]["pts"]
     groups = [("Picks 1–5", 1, 5), ("Picks 6–10", 6, 10), ("Picks 11–20", 11, 20), ("Picks 21–30", 21, 30)]
     for label, start, end in groups:
@@ -204,19 +213,22 @@ def show_schedule():
     st.dataframe(disp, hide_index=True, use_container_width=True, height=2500)
 
 # --- 5. NAVIGATION ---
+# Standard pages available to everyone
 pages = [
     st.Page(show_2026, title="2026 Dashboard", icon="📊"), 
-    st.Page(show_dynasty, title="Dynasty Dashboard", icon="🏆"),
     st.Page(show_point_history, title="Point History", icon="📜"),
     st.Page(show_roster, title="Master Roster", icon="👥"), 
     st.Page(show_analysis, title="Analysis", icon="📈"),
     st.Page(show_schedule, title="Full Schedule", icon="📅")
 ]
 
+# Hidden pages available only after unlock
 if check_password():
+    pages.append(st.Page(show_dynasty, title="Dynasty Dashboard", icon="🏆"))
+    
     def show_dev():
         st.title("🛠 Developer Tools")
-        st.write("Displaying raw data results for debugging.")
+        st.write("Developer debugging views and Dynasty management.")
     pages.append(st.Page(show_dev, title="Dev Tools", icon="🛠"))
 
 pg = st.navigation(pages)
