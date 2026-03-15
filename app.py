@@ -59,25 +59,25 @@ def format_stage_safe(val):
 @st.cache_data(ttl=300)
 def load_all_data():
     try:
-        seasonal_r = pd.read_csv('riders.csv')
-        dynasty_r = pd.read_csv('dynastyriders.csv') # Updated filename
+        y2026_r = pd.read_csv('riders.csv')
+        dynasty_r = pd.read_csv('dynastyriders.csv')
         schedule = pd.read_csv('schedule.csv')
         results = pd.read_excel('results.xlsx', engine='openpyxl')
         results['Date'] = pd.to_datetime(results['Date'], errors='coerce')
         
-        for df in [seasonal_r, dynasty_r]:
+        for df in [y2026_r, dynasty_r]:
             df['team_pick'] = df.groupby('owner').cumcount() + 1
             df['add_date'] = pd.to_datetime(df['add_date'], errors='coerce')
             df['drop_date'] = pd.to_datetime(df['drop_date'], errors='coerce').fillna(pd.Timestamp('2026-12-31'))
             df['match_name'] = df['rider_name'].apply(normalize_name)
             
-        return seasonal_r, dynasty_r, schedule, results
+        return y2026_r, dynasty_r, schedule, results
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None, None, None, None
 
 # --- 3. DATA PROCESSING ---
-s_riders, d_riders, schedule_df, results_raw = load_all_data()
+r2026, d_riders, schedule_df, results_raw = load_all_data()
 
 def process_league_data(riders_df, schedule, results):
     if riders_df is None or results is None:
@@ -102,11 +102,11 @@ def process_league_data(riders_df, schedule, results):
     
     return proc, leaderb, pts_total
 
-seasonal_proc, seasonal_lb, seasonal_pts = process_league_data(s_riders, schedule_df, results_raw)
+proc2026, lb2026, pts2026 = process_league_data(r2026, schedule_df, results_raw)
 dynasty_proc, dynasty_lb, dynasty_pts = process_league_data(d_riders, schedule_df, results_raw)
 
 leagues = {
-    "Seasonal": {"proc": seasonal_proc, "lb": seasonal_lb, "pts": seasonal_pts},
+    "2026": {"proc": proc2026, "lb": lb2026, "pts": pts2026},
     "Dynasty": {"proc": dynasty_proc, "lb": dynasty_lb, "pts": dynasty_pts}
 }
 
@@ -116,7 +116,7 @@ def render_dashboard(league_key, title):
     st.title(title)
     data = leagues[league_key]
     if data["proc"].empty:
-        st.info("No points recorded yet for this league.")
+        st.info(f"No points recorded yet for the {league_key} league.")
         return
 
     m1, m2 = st.columns(2)
@@ -139,7 +139,7 @@ def render_dashboard(league_key, title):
             st.dataframe(top5.rename(columns={'rider_name':'Rider','pts':'Points'}), hide_index=True, use_container_width=True)
 
     with col_right:
-        st.subheader("Season Progress")
+        st.subheader("Points Progress")
         timeline = data["proc"].groupby(['Date', 'owner'])['pts'].sum().unstack(fill_value=0)
         full_range = pd.date_range(start=timeline.index.min(), end=timeline.index.max())
         chart_data = timeline.reindex(full_range, fill_value=0).cumsum().reset_index().melt(id_vars='index', var_name='Owner', value_name='Points')
@@ -148,12 +148,12 @@ def render_dashboard(league_key, title):
         fig.update_layout(hovermode="x unified", xaxis_title="", yaxis_title="Cumulative Points")
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-def show_seasonal(): render_dashboard("Seasonal", "Seasonal Fantasy Cycling")
-def show_dynasty(): render_dashboard("Dynasty", "Dynasty Fantasy Cycling")
+def show_2026(): render_dashboard("2026", "2026 Fantasy Cycling Dashboard")
+def show_dynasty(): render_dashboard("Dynasty", "Dynasty Fantasy Cycling Dashboard")
 
 def show_point_history():
     st.title("Point History")
-    choice = st.radio("Select League", ["Seasonal", "Dynasty"], horizontal=True)
+    choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
     proc = leagues[choice]["proc"]
     if not proc.empty:
         ytd = proc.sort_values(by=['Date', 'Race Name', 'pts'], ascending=[False, True, False]).copy()
@@ -166,7 +166,7 @@ def show_point_history():
 
 def show_roster():
     st.title("Master Roster Comparison")
-    choice = st.radio("Select League", ["Seasonal", "Dynasty"], horizontal=True)
+    choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
     pts = leagues[choice]["pts"]
     pick_indices = list(range(1, 31))
     def get_team(owner):
@@ -184,7 +184,7 @@ def show_roster():
 
 def show_analysis():
     st.title("Draft Performance Analysis")
-    choice = st.radio("Select League", ["Seasonal", "Dynasty"], horizontal=True)
+    choice = st.radio("Select League", ["2026", "Dynasty"], horizontal=True)
     pts = leagues[choice]["pts"]
     groups = [("Picks 1–5", 1, 5), ("Picks 6–10", 6, 10), ("Picks 11–20", 11, 20), ("Picks 21–30", 21, 30)]
     for label, start, end in groups:
@@ -205,7 +205,7 @@ def show_schedule():
 
 # --- 5. NAVIGATION ---
 pages = [
-    st.Page(show_seasonal, title="Seasonal Dashboard", icon="📊"), 
+    st.Page(show_2026, title="2026 Dashboard", icon="📊"), 
     st.Page(show_dynasty, title="Dynasty Dashboard", icon="🏆"),
     st.Page(show_point_history, title="Point History", icon="📜"),
     st.Page(show_roster, title="Master Roster", icon="👥"), 
